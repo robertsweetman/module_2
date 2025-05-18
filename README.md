@@ -13,7 +13,8 @@
 2. Add column for 'test data' category
   - Bid Y/N
   - Do this manually
-3. Look at serverless rust options maybe?
+3. Look at serverless rust options maybe?#
+  - https://github.com/featurestoreorg/serverless-ml-course 
 4. Print rubric
 5. Write up rubric notes in submission document
 6. Rust model training
