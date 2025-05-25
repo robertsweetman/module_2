@@ -2,6 +2,8 @@
 
 ## Notes:
 
+Print the rubric sheet
+
 ## TODO:
 
 0. Bring in notes from word doc
