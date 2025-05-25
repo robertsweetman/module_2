@@ -1,0 +1,12 @@
+[book]
+authors = ["robertsweetman"]
+language = "en"
+multilingual = false
+src = "src"
+title = "AI-and-ML-Integration-for-Business-Value"
+
+[preprocessor.mermaid]
+command = "mdbook-mermaid"
+
+[output.html]
+additional-js = ["mermaid-init.js", "mermaid.min.js"]

@@ -1,0 +1,141 @@
+name: Generate PDF
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install latest mdbook
+        run: |
+          tag=$(curl 'https://api.github.com/repos/rust-lang/mdbook/releases/latest' | jq -r '.tag_name')
+          url="https://github.com/rust-lang/mdbook/releases/download/${tag}/mdbook-${tag}-x86_64-unknown-linux-gnu.tar.gz"
+          mkdir mdbook
+          curl -sSL $url | tar -xz --directory=./mdbook
+          echo `pwd`/mdbook >> $GITHUB_PATH
+        
+      - name: Install mdbook-mermaid preprocessor
+        run: |
+          curl -sSL https://github.com/badboy/mdbook-mermaid/releases/download/v0.12.6/mdbook-mermaid-v0.12.6-x86_64-unknown-linux-gnu.tar.gz | tar -xz --directory=${GITHUB_WORKSPACE}//cratesmdbook
+          # Ensure the mdbook-mermaid executable is in PATH
+          echo ${GITHUB_WORKSPACE}/mdbook >> $GITHUB_PATH
+          # Install mermaid support
+          ${GITHUB_WORKSPACE}/mdbook/mdbook-mermaid install .
+
+      - name: Set up image paths
+        run: |
+          # Create images directory at the root and copy images from src/images
+          mkdir -p images
+          cp -r src/images/* images/
+          
+          # Verify the images are in place
+          ls -la images/
+      
+      - name: Build Book
+        run: |
+          # List available executables in the PATH
+          echo "Contents of mdbook directory:"
+          ls -la ${GITHUB_WORKSPACE}/mdbook
+          # Build the book
+          mdbook build
+
+      # Add Node.js setup for Puppeteer
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Install Puppeteer
+        run: npm install puppeteer@13.5.0
+
+      - name: Generate PDF using Puppeteer
+        run: |
+          cat > pdf-generator.js << 'EOL'
+          const puppeteer = require('puppeteer');
+          
+          // Helper function for waiting that works with older Puppeteer versions
+          async function wait(page, ms) {
+            if (page.waitForTimeout) {
+              await page.waitForTimeout(ms);
+            } else if (page.waitFor) {
+              await page.waitFor(ms);
+            } else {
+              await new Promise(resolve => setTimeout(resolve, ms));
+            }
+          }
+          
+          (async () => {
+            // Launch browser with necessary flags for GitHub Actions environment
+            const browser = await puppeteer.launch({
+              args: ['--no-sandbox', '--disable-setuid-sandbox']
+            });
+            const page = await browser.newPage();
+            
+            // Set viewport to A4 size
+            await page.setViewport({
+              width: 1240,
+              height: 1754,
+              deviceScaleFactor: 1,
+            });
+            
+            // Navigate to the print.html page (already prepared by mdbook for printing)
+            await page.goto(`file://${process.cwd()}/book/print.html`, {
+              waitUntil: 'networkidle0'
+            });
+            
+            // Wait extra time for mermaid diagrams to render
+            await wait(page, 3000);
+            
+            // Force mermaid to re-render
+            await page.evaluate(() => {
+              if (typeof mermaid !== 'undefined') {
+                mermaid.init(undefined, document.querySelectorAll('.mermaid'));
+              }
+            });
+            
+            // Wait again for rendering
+            await wait(page, 2000);
+            
+            // Generate PDF with no margins for presentation style
+            await page.pdf({
+              path: 'no_margin.pdf',
+              format: 'A4',
+              printBackground: true,
+              margin: { top: '0', right: '0', bottom: '0', left: '0' }
+            });
+            
+            // Generate PDF with small margins
+            await page.pdf({
+              path: 'presentation.pdf',
+              format: 'A4',
+              printBackground: true,
+              margin: { top: '5mm', right: '5mm', bottom: '5mm', left: '5mm' },
+              displayHeaderFooter: true,
+              footerTemplate: '<div style="width: 100%; text-align: right; font-size: 8pt; color: #999; padding-right: 10px;"><span class="pageNumber"></span>/<span class="totalPages"></span></div>',
+              headerTemplate: '<div></div>'
+            });
+            
+            // Close browser
+            await browser.close();
+            
+            console.log('PDFs generated successfully');
+          })().catch(err => {
+            console.error('Error generating PDFs:', err);
+            process.exit(1);
+          });
+          EOL
+          
+          node pdf-generator.js
+          
+          # Check file sizes
+          ls -la *.pdf
+          echo "Generated both zero-margin and 5pt-margin PDFs using Puppeteer"
+
+      - name: Upload PDF as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: presentation-pdf
+          path: "*.pdf"
