@@ -28,9 +28,9 @@ jobs:
 
       - name: Set up image paths
         run: |
-          # Create images directory at the root and copy images from src/images
+          # Create images directory at the root and copy images from crates/mdbook/src/images
           mkdir -p images
-          cp -r src/images/* images/
+          cp -r crates/mdbook/src/images/* images/
           
           # Verify the images are in place
           ls -la images/
