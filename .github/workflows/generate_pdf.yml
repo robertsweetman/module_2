@@ -41,6 +41,7 @@ jobs:
           echo "Contents of mdbook directory:"
           ls -la ${GITHUB_WORKSPACE}/crates/mdbook
           # Build the book
+          cd crates/mdbook
           mdbook build
 
       # Add Node.js setup for Puppeteer
