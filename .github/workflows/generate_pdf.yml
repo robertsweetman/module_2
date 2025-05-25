@@ -23,7 +23,8 @@ jobs:
           # Ensure the mdbook-mermaid executable is in PATH
           # echo ${GITHUB_WORKSPACE}/crates/mdbook >> $GITHUB_PATH
           # Install mermaid support
-          ./crates/mdbook/mdbook-mermaid install .
+          cd crates/mdbook
+          mdbook-mermaid install .
 
       - name: Set up image paths
         run: |
