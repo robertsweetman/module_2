@@ -2,6 +2,8 @@
 
 ## Notes:
 
+Print the rubric sheet
+
 ## TODO:
 
 1. Pull data into PostGres DB
