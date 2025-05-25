@@ -13,17 +13,17 @@ jobs:
         run: |
           tag=$(curl 'https://api.github.com/repos/rust-lang/mdbook/releases/latest' | jq -r '.tag_name')
           url="https://github.com/rust-lang/mdbook/releases/download/${tag}/mdbook-${tag}-x86_64-unknown-linux-gnu.tar.gz"
-          mkdir mdbook
-          curl -sSL $url | tar -xz --directory=./mdbook
-          echo `pwd`/mdbook >> $GITHUB_PATH
+          mkdir /crates/mdbook
+          curl -sSL $url | tar -xz --directory=./crates/mdbook
+          echo `pwd`/crates/mdbook >> $GITHUB_PATH
         
       - name: Install mdbook-mermaid preprocessor
         run: |
           curl -sSL https://github.com/badboy/mdbook-mermaid/releases/download/v0.12.6/mdbook-mermaid-v0.12.6-x86_64-unknown-linux-gnu.tar.gz | tar -xz --directory=${GITHUB_WORKSPACE}//cratesmdbook
           # Ensure the mdbook-mermaid executable is in PATH
-          echo ${GITHUB_WORKSPACE}/mdbook >> $GITHUB_PATH
+          echo ${GITHUB_WORKSPACE}/crates/mdbook >> $GITHUB_PATH
           # Install mermaid support
-          ${GITHUB_WORKSPACE}/mdbook/mdbook-mermaid install .
+          ${GITHUB_WORKSPACE}/crates/mdbook/mdbook-mermaid install .
 
       - name: Set up image paths
         run: |
@@ -38,7 +38,7 @@ jobs:
         run: |
           # List available executables in the PATH
           echo "Contents of mdbook directory:"
-          ls -la ${GITHUB_WORKSPACE}/mdbook
+          ls -la ${GITHUB_WORKSPACE}/crates/mdbook
           # Build the book
           mdbook build
 
