@@ -4,6 +4,9 @@
 
 ## TODO:
 
+0. Bring in notes from word doc
+  - Read/make my own notes on the rubric
+  - Bring in MDdoc setup and pipelines from Module 1
 1. Pull data into PostGres DB
   - Store in S3?
   - TF s3 bucket and tf state
