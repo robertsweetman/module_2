@@ -16,7 +16,7 @@ jobs:
           mkdir -p crates/mdbook
           curl -sSL $url | tar -xz --directory=./crates/mdbook
           echo ${GITHUB_WORKSPACE}/crates/mdbook >> $GITHUB_PATH
-        
+
       - name: Install mdbook-mermaid preprocessor
         run: |
           curl -sSL https://github.com/badboy/mdbook-mermaid/releases/download/v0.12.6/mdbook-mermaid-v0.12.6-x86_64-unknown-linux-gnu.tar.gz | tar -xz --directory=./crates/mdbook
@@ -31,24 +31,34 @@ jobs:
           # Create images directory at the root and copy images from crates/mdbook/src/images
           mkdir -p images
           cp -r crates/mdbook/src/images/* images/
-          
+
           # Verify the images are in place
           ls -la images/
-      
+
       - name: Build Book
         run: |
           # List available executables in the PATH
           echo "Contents of mdbook directory:"
           ls -la ${GITHUB_WORKSPACE}/crates/mdbook
-          # Build the book
+
+          # Change to the mdbook directory and build the book
           cd crates/mdbook
           mdbook build
+          cd ../..
+
+          # Copy the built book to the root for PDF generation
+          cp -r crates/mdbook/book ./book
+
+          # Verify the book was copied
+          ls -la book/
+          echo "Checking for print.html:"
+          ls -la book/print.html
 
       # Add Node.js setup for Puppeteer
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
-          node-version: '18'
+          node-version: "18"
 
       - name: Install Puppeteer
         run: npm install puppeteer@13.5.0
@@ -57,7 +67,7 @@ jobs:
         run: |
           cat > pdf-generator.js << 'EOL'
           const puppeteer = require('puppeteer');
-          
+
           // Helper function for waiting that works with older Puppeteer versions
           async function wait(page, ms) {
             if (page.waitForTimeout) {
@@ -68,7 +78,7 @@ jobs:
               await new Promise(resolve => setTimeout(resolve, ms));
             }
           }
-          
+
           (async () => {
             // Launch browser with necessary flags for GitHub Actions environment
             const browser = await puppeteer.launch({
@@ -129,9 +139,9 @@ jobs:
             process.exit(1);
           });
           EOL
-          
+
           node pdf-generator.js
-          
+
           # Check file sizes
           ls -la *.pdf
           echo "Generated both zero-margin and 5pt-margin PDFs using Puppeteer"
