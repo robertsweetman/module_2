@@ -37,7 +37,6 @@ jobs:
       # env:
       #   TF_VAR_ai_key: ${{ secrets.ANTHROPIC_API_KEY }}
       run: terraform plan
-      continue-on-error: true
 
     - name: Terraform Plan Status
       if: steps.plan.outcome == 'failure'
