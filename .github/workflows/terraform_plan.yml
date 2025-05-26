@@ -24,13 +24,16 @@ jobs:
         aws-region: ${{ secrets.AWS_REGION }}
 
     - name: Terraform Init
+      working-directory: ./aws_deploy_infrastructure
       run: terraform init
 
     - name: Terraform Format
+      working-directory: ./aws_deploy_infrastructure    
       run: terraform fmt
 
     - name: Terraform Plan
       id: plan
+      working-directory: ./aws_deploy_infrastructure
       # env:
       #   TF_VAR_ai_key: ${{ secrets.ANTHROPIC_API_KEY }}
       run: terraform plan
