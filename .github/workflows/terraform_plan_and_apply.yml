@@ -43,7 +43,7 @@ jobs:
       uses: actions/upload-artifact@v3
       with:
         name: tfplan
-        path: tfplan
+        path: ./aws_deploy_infrastructure/tfplan
 
   terraform_apply:
     needs: terraform_plan
@@ -70,11 +70,14 @@ jobs:
       uses: actions/download-artifact@v3
       with:
         name: tfplan
+        path: ./aws_deploy_infrastructure
 
     - name: Terraform Init
+      working-directory: ./aws_deploy_infrastructure
       run: terraform init
 
     - name: Terraform Apply
       # env:
       #   TF_VAR_ai_key: ${{ secrets.ANTHROPIC_API_KEY }}
+      working-directory: ./aws_deploy_infrastructure
       run: terraform apply -auto-approve tfplan
