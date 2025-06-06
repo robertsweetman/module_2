@@ -34,6 +34,8 @@ jobs:
     - name: Terraform Plan
       id: plan
       working-directory: ./aws_deploy_infrastructure
+      env:
+        TF_VAR_db_admin_name: ${{ secrets.DB_ADMIN_NAME }}
       # env:
       #   TF_VAR_ai_key: ${{ secrets.ANTHROPIC_API_KEY }}
       run: terraform plan -out=tfplan
@@ -86,7 +88,9 @@ jobs:
       run: terraform init
 
     - name: Terraform Apply
-      # env:
+      env:
+        TF_VAR_db_admin_name: ${{ secrets.DB_ADMIN_NAME }}
+        TF_VAR_db_admin_pwd: ${{ secrets.DB_ADMIN_PWD }}
       #   TF_VAR_ai_key: ${{ secrets.ANTHROPIC_API_KEY }}
       working-directory: ./aws_deploy_infrastructure
       run: terraform apply -auto-approve tfplan
