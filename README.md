@@ -45,6 +45,13 @@ Print the rubric sheet
   - What other options
 10. Reference back to the rubric for marking
 
+### Structure: 
 
+crates/aisummary
+crates/datamanipulation
+crates/modeltraining
+crates/pushresults
+
+These 4 all need creating
 
 

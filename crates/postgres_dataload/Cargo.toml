@@ -1,0 +1,12 @@
+[package]
+name = "postgres_dataload"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+lambda_runtime = "0.14.1"
+reqwest = "0.12.19"
+scraper = "0.23.1"
+serde = "1.0.219"
+sqlx = { version = "0.8.6", features = ["postgres"] }
+tokio = "1.45.1"
