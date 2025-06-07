@@ -15,7 +15,7 @@ resource "aws_sfn_state_machine" "pdf_processing_workflow" {
         "States": {
           "ProcessSinglePDF": {
             "Type": "Task",
-            "Resource": "${aws_lambda_function.pdf_processing.arn}",
+            "Resource": "${aws_lambda_function.pdf_processing[0].arn}",
             "Retry": [
               {
                 "ErrorEquals": ["States.ALL"],
@@ -65,7 +65,7 @@ resource "aws_iam_role_policy" "step_functions_policy" {
           "lambda:InvokeFunction"
         ]
         Resource = [
-          aws_lambda_function.pdf_processing.arn
+          aws_lambda_function.pdf_processing[0].arn
         ]
       }
     ]
