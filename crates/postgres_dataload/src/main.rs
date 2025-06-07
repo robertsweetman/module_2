@@ -6,7 +6,7 @@ use std::env;
 use reqwest::Client;
 use tokio;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 struct TenderRecord {
     title: String,
     resource_id: String,
@@ -33,6 +33,8 @@ struct Response {
     records_count: usize,
     success: bool,
     message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    sample_records: Option<Vec<TenderRecord>>,
 }
 
 async fn function_handler(event: LambdaEvent<Request>) -> Result<Response, Error> {
@@ -69,6 +71,25 @@ async fn function_handler(event: LambdaEvent<Request>) -> Result<Response, Error
     // Get records
     let records = get_table_content(&client, base_url, max_pages, test_mode).await?;
     
+    // In function_handler, after getting records but before saving
+    if test_mode {
+        println!("\n=== SAMPLE RECORDS ===");
+        for (i, record) in records.iter().enumerate() {
+            println!("Record #{}", i+1);
+            println!("  Title: {}", record.title);
+            println!("  Resource ID: {}", record.resource_id);
+            println!("  Contracting Authority: {}", record.ca);
+            println!("  Published: {}", record.published);
+            println!("  Deadline: {}", record.deadline);
+            println!("  Procedure: {}", record.procedure);
+            println!("  Status: {}", record.status);
+            println!("  Value: {}", record.value);
+            println!("  PDF URL: {}", record.pdf_url);
+            println!("  ---");
+        }
+        println!("=== END OF RECORDS ===\n");
+    }
+    
     // Only save if not in test mode
     if !test_mode {
         if let Some(pool_ref) = &pool {
@@ -79,7 +100,12 @@ async fn function_handler(event: LambdaEvent<Request>) -> Result<Response, Error
     Ok(Response {
         records_count: records.len(),
         success: true,
-        message: format!("Successfully scraped and stored {} tender records", records.len()),
+        message: format!("Successfully scraped {} tender records", records.len()),
+        sample_records: if test_mode {
+            Some(records.clone())
+        } else {
+            None
+        },
     })
 }
 
