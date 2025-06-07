@@ -1,22 +1,4 @@
-# Check if the deployment packages exist in S3
-data "aws_s3_object" "pdf_processing_zip" {
-  bucket = aws_s3_bucket.lambda_bucket.bucket
-  key    = "pdf_processing.zip"
-}
-
-data "aws_s3_object" "postgres_dataload_zip" {
-  bucket = aws_s3_bucket.lambda_bucket.bucket
-  key    = "postgres_dataload.zip"
-}
-
-locals {
-  pdf_processing_exists = try(data.aws_s3_object.pdf_processing_zip.content_length, 0) > 0
-  postgres_dataload_exists = try(data.aws_s3_object.postgres_dataload_zip.content_length, 0) > 0
-}
-
 resource "aws_lambda_function" "pdf_processing" {
-  count         = local.pdf_processing_exists ? 1 : 0
-
   function_name = "pdf-processing"
   handler       = "bootstrap"
   runtime       = "provided.al2"
@@ -24,6 +6,11 @@ resource "aws_lambda_function" "pdf_processing" {
   
   s3_bucket     = aws_s3_bucket.lambda_bucket.bucket
   s3_key        = "pdf_processing.zip"
+
+  depends_on = [aws_s3_bucket.lambda_bucket]
+  lifecycle {
+    ignore_changes = [source_code_hash]
+  }
   
   environment {
     variables = {
@@ -36,8 +23,6 @@ resource "aws_lambda_function" "pdf_processing" {
 }
 
 resource "aws_lambda_function" "postgres_dataload" {
-  count         = local.postgres_dataload_exists ? 1 : 0
-
   function_name = "postgres-dataload"
   handler       = "bootstrap"
   runtime       = "provided.al2"
@@ -45,6 +30,11 @@ resource "aws_lambda_function" "postgres_dataload" {
   
   s3_bucket     = aws_s3_bucket.lambda_bucket.bucket
   s3_key        = "postgres_dataload.zip"
+
+  depends_on = [aws_s3_bucket.lambda_bucket]
+  lifecycle {
+    ignore_changes = [source_code_hash]
+  }
   
   environment {
     variables = {
