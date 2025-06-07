@@ -1,0 +1,55 @@
+48000000,Software package and information systems
+72000000,IT services - consulting
+72100000,Hardware consultancy services
+72110000,Hardware selection consultancy services
+72120000,Hardware disaster-recovery consultancy services
+72130000,Computer - site planning consultancy services
+72140000,Computer hardware acceptance testing consultancy services
+72150000,Computer audit consultancy and hardware consultancy services
+72200000,Software programming and consultancy services
+72210000,Programming services of packaged software products
+72220000,Systems and technical consultancy services
+72221000,Business analysis consultancy services
+72222000,Information systems or technology strategic review and planning services
+72222100,Information systems or technology strategic review services
+72222200,Information systems or technology planning services
+48190000,Educational software package
+48200000,Networking
+72320000,Database services
+72321000,Added-value database services
+72322000,Data management services
+72330000,Content or data standardization and classification services
+72400000,Internet services
+48220000,Internet and intranet software package
+48300000,Document creation
+48100000,Industry specific software package
+48400000,Business transaction and personal business software package
+48480000,Sales
+48500000,Communication and multimedia software package
+48600000,Database and operating software package
+48700000,Software package utilities
+48900000,Miscellaneous software package and computer systems
+72222300,Information technology services
+72223000,Information technology requirements review services
+72224000,Project management consultancy services
+72224100,System implementation planning services
+72224200,System quality assurance planning services
+72225000,System quality assurance assessment and review services
+72226000,System software acceptance testing consultancy services
+72227000,Software integration consultancy services
+72228000,Hardware integration consultancy services
+72300000,Data services
+72310000,Data-processing services
+72421000,Internet or intranet client application development services
+72422000,Internet or intranet server application development services
+72500000,Computer-related services
+72510000,Computer-related management services
+72540000,Computer upgrade services
+72590000,Computer-related professional services
+72600000,Computer support and consultancy services
+72610000,Computer support services
+72700000,Computer network services
+72800000,Computer audit and testing services
+72900000,Computer back-up and catalogue conversion services
+73100000,Research and experimental development services
+73200000,Research and development consultancy services
