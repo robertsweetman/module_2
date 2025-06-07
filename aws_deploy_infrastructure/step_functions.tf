@@ -71,21 +71,3 @@ resource "aws_iam_role_policy" "step_functions_policy" {
     ]
   })
 }
-
-resource "aws_lambda_function" "pdf_processing" {
-  function_name = "pdf-processing"
-  handler       = "bootstrap"
-  runtime       = "provided.al2"
-  role          = aws_iam_role.lambda_role.arn
-  
-  filename      = "../crates/pdf_processing/target/lambda/pdf-processing/bootstrap.zip"
-  
-  environment {
-    variables = {
-      DATABASE_URL = "postgres://${var.db_admin_name}:${var.db_admin_pwd}@${aws_db_instance.postgres.endpoint}/${var.db_name}"
-    }
-  }
-  
-  timeout = 60  # PDFs can take time to process
-  memory_size = 512
-}
