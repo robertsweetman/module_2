@@ -2,6 +2,8 @@ resource "aws_sfn_state_machine" "pdf_processing_workflow" {
   name     = "pdf-processing-workflow"
   role_arn = aws_iam_role.step_functions_role.arn
 
+  depends_on = [aws_lambda_function.pdf_processing]
+
   definition = <<EOF
 {
   "Comment": "PDF Processing Workflow",
@@ -15,7 +17,7 @@ resource "aws_sfn_state_machine" "pdf_processing_workflow" {
         "States": {
           "ProcessSinglePDF": {
             "Type": "Task",
-            "Resource": "${aws_lambda_function.pdf_processing[0].arn}",
+            "Resource": "${aws_lambda_function.pdf_processing.arn}",
             "Retry": [
               {
                 "ErrorEquals": ["States.ALL"],
@@ -56,6 +58,8 @@ resource "aws_iam_role_policy" "step_functions_policy" {
   name = "step_functions_policy"
   role = aws_iam_role.step_functions_role.id
 
+  depends_on = [aws_lambda_function.pdf_processing]
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -65,7 +69,7 @@ resource "aws_iam_role_policy" "step_functions_policy" {
           "lambda:InvokeFunction"
         ]
         Resource = [
-          aws_lambda_function.pdf_processing[0].arn
+          aws_lambda_function.pdf_processing.arn
         ]
       }
     ]
