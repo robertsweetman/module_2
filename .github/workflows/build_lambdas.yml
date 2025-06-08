@@ -18,11 +18,9 @@ jobs:
       - uses: actions/checkout@v4
       
       - name: Set up Rust
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: stable
-          target: x86_64-unknown-linux-musl
-          override: true
+          targets: x86_64-unknown-linux-musl
 
       - name: Install toolchain
         run: |
@@ -38,69 +36,52 @@ jobs:
         run: |
           mkdir -p lambda-builds
           
-          # Build postgres_dataload
-          cd crates/postgres_dataload
-          cargo lambda build --release --target x86_64-unknown-linux-musl
-          
-          # Debug - show directory structure
-          echo "Current directory: $(pwd)"
-          echo "List of directories in current folder:"
+          # Check workspace root structure
+          echo "Workspace root directory structure:"
           ls -la
           
-          echo "Target directory content:"
-          ls -la target || echo "No target directory"
+          # Build postgres_dataload
+          cargo lambda build --release --target x86_64-unknown-linux-musl --package postgres_dataload
           
-          echo "Recursive search for bootstrap files:"
+          # Search for bootstrap in workspace target
+          echo "Searching for bootstrap files in workspace:"
           find . -name "bootstrap" -type f
           
-          echo "Recursive search for lambda directory:"
-          find . -name "lambda" -type d
-          
           # Create zip manually from wherever bootstrap is located
-          BOOTSTRAP_PATH=$(find . -name "bootstrap" -type f | head -1)
-          if [ -n "$BOOTSTRAP_PATH" ]; then
-            echo "Found bootstrap at: $BOOTSTRAP_PATH"
-            cp "$BOOTSTRAP_PATH" bootstrap
-            zip -j ../../../lambda-builds/postgres_dataload.zip bootstrap
-            rm bootstrap
+          POSTGRES_BOOTSTRAP=$(find . -path "*postgres*" -name "bootstrap" -type f | head -1)
+          if [ -n "$POSTGRES_BOOTSTRAP" ]; then
+            echo "Found postgres bootstrap at: $POSTGRES_BOOTSTRAP"
+            cp "$POSTGRES_BOOTSTRAP" postgres_bootstrap
+            zip -j lambda-builds/postgres_dataload.zip postgres_bootstrap
+            rm postgres_bootstrap
           else
-            echo "ERROR: Could not find bootstrap executable!"
+            echo "ERROR: Could not find postgres bootstrap executable!"
             exit 1
           fi
           
           # Build pdf_processing
-          cd ../pdf_processing
-          cargo lambda build --release --target x86_64-unknown-linux-musl
-          
-          # Debug - show directory structure
-          echo "Current directory: $(pwd)"
-          echo "List of directories in current folder:"
-          ls -la
-          
-          echo "Target directory content:"
-          ls -la target || echo "No target directory"
-          
-          echo "Recursive search for bootstrap files:"
-          find . -name "bootstrap" -type f
+          cargo lambda build --release --target x86_64-unknown-linux-musl --package pdf_processing
           
           # Create zip manually from wherever bootstrap is located
-          BOOTSTRAP_PATH=$(find . -name "bootstrap" -type f | head -1)
-          if [ -n "$BOOTSTRAP_PATH" ]; then
-            echo "Found bootstrap at: $BOOTSTRAP_PATH"
-            cp "$BOOTSTRAP_PATH" bootstrap
-            zip -j ../../../lambda-builds/pdf_processing.zip bootstrap
+          PDF_BOOTSTRAP=$(find . -path "*pdf*" -name "bootstrap" -type f | head -1)
+          if [ -n "$PDF_BOOTSTRAP" ]; then
+            echo "Found pdf bootstrap at: $PDF_BOOTSTRAP"
+            cp "$PDF_BOOTSTRAP" pdf_bootstrap
+            zip -j lambda-builds/pdf_processing.zip pdf_bootstrap
+            mv pdf_bootstrap bootstrap
+            zip -j lambda-builds/pdf_processing.zip bootstrap
             rm bootstrap
           else
-            echo "ERROR: Could not find bootstrap executable!"
+            echo "ERROR: Could not find pdf bootstrap executable!"
             exit 1
           fi
           
           # Show what we have in lambda-builds
           echo "Contents of lambda-builds directory:"
-          ls -la ../../../lambda-builds/
+          ls -la lambda-builds/
       
       - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v1
+        uses: aws-actions/configure-aws-credentials@v2
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
