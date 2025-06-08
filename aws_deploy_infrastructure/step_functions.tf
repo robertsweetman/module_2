@@ -12,6 +12,7 @@ resource "aws_sfn_state_machine" "pdf_processing_workflow" {
     "ProcessTenderPDFs": {
       "Type": "Map",
       "ItemsPath": "$.records",
+      "MaxConcurrency": 20,
       "Iterator": {
         "StartAt": "ProcessSinglePDF",
         "States": {

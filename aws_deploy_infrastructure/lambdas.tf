@@ -18,8 +18,8 @@ resource "aws_lambda_function" "pdf_processing" {
     }
   }
   
-  timeout = 60
-  memory_size = 512
+  timeout = 900
+  memory_size = 1024
 }
 
 resource "aws_lambda_function" "postgres_dataload" {
@@ -43,6 +43,6 @@ resource "aws_lambda_function" "postgres_dataload" {
     }
   }
   
-  timeout = 60
-  memory_size = 512
+  timeout = 900
+  memory_size = 1024
 }
