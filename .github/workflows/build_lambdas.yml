@@ -35,19 +35,26 @@ jobs:
           cargo lambda --version
         
       - name: Build Lambdas
-        # env:
-          # OPENSSL_DIR: /usr
-          # OPENSSL_LIB_DIR: /usr/lib/x86_64-linux-gnu
-          # OPENSSL_INCLUDE_DIR: /usr/include/openssl
         run: |
           mkdir -p lambda-builds
-          cd crates/postgres_dataload
-          cargo lambda build --release --target x86_64-unknown-linux-musl --output-format zip
-          cp target/lambda/postgres-dataload/bootstrap.zip ../../../lambda-builds/postgres_dataload.zip
           
-          cd ../pdf_processing
-          cargo lambda build --release --target x86_64-unknown-linux-musl --output-format zip
-          cp target/lambda/pdf-processing/bootstrap.zip ../../../lambda-builds/pdf_processing.zip
+          # Build postgres_dataload
+          cd crates/postgres_dataload
+          cargo lambda build --release --target x86_64-unknown-linux-musl
+          
+          # Create zip
+          cd target/lambda/postgres_dataload
+          zip -j bootstrap.zip bootstrap
+          cp bootstrap.zip ../../../../../lambda-builds/postgres_dataload.zip
+          
+          # Build pdf_processing
+          cd ../../../../pdf_processing
+          cargo lambda build --release --target x86_64-unknown-linux-musl
+          
+          # Create zip
+          cd target/lambda/pdf_processing
+          zip -j bootstrap.zip bootstrap
+          cp bootstrap.zip ../../../../../lambda-builds/pdf_processing.zip
       
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v1
