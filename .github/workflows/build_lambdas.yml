@@ -22,7 +22,7 @@ jobs:
         with:
           toolchain: stable
           target: x86_64-unknown-linux-musl
-          profile: minimal
+          override: true
 
       - name: Install toolchain
         run: |
