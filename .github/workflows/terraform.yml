@@ -79,6 +79,10 @@ jobs:
       working-directory: ./aws_deploy_infrastructure
       run: terraform init
 
+    - name: Terraform Format
+      working-directory: ./aws_deploy_infrastructure    
+      run: terraform fmt
+
     - name: Terraform Plan (regenerate)
       working-directory: ./aws_deploy_infrastructure
       env:
