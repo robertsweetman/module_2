@@ -1,11 +1,11 @@
-name: Terraform Plan and Apply
+name: Terraform Deploy - Production
 
 on:
   workflow_dispatch:
-  push:
-    branches: [ main ]
-    paths:
-      - 'aws_deploy_infrastructure/**'
+  # push:
+  #   branches: [ main ]
+  #   paths:
+  #     - 'aws_deploy_infrastructure/**'
 
 jobs:
   terraform:
