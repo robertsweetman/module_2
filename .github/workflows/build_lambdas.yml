@@ -51,7 +51,7 @@ jobs:
             exit 1
           fi
           
-      - name: Upload to S3
-        run: |
-          aws s3 cp lambda-builds/postgres_dataload.zip s3://$LAMBDA_BUCKET/
-          aws s3 cp lambda-builds/pdf_processing.zip s3://$LAMBDA_BUCKET/
+      # - name: Upload to S3
+      #   run: |
+      #     aws s3 cp lambda-builds/postgres_dataload.zip s3://$LAMBDA_BUCKET/
+      #     aws s3 cp lambda-builds/pdf_processing.zip s3://$LAMBDA_BUCKET/
