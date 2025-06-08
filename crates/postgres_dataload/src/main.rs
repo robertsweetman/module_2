@@ -5,6 +5,9 @@ use sqlx::{Pool, postgres::{PgPoolOptions, Postgres}};
 use std::env;
 use reqwest::Client;
 use tokio;
+use serde_json;
+use aws_config;
+use aws_sdk_sfn;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 struct TenderRecord {
@@ -97,6 +100,51 @@ async fn function_handler(event: LambdaEvent<Request>) -> Result<Response, Error
         }
     }
     
+    // After processing the records but before returning the Response
+    // Filter records with non-empty PDF URLs for processing
+    let pdf_records: Vec<serde_json::Value> = records.iter()
+        .filter(|r| !r.pdf_url.is_empty())
+        .map(|r| serde_json::json!({
+            "resource_id": r.resource_id,
+            "pdf_url": r.pdf_url
+        }))
+        .collect();
+
+    if !pdf_records.is_empty() && !test_mode {
+        println!("Found {} records with PDFs, triggering processing workflow", pdf_records.len());
+        
+        // Initialize AWS SDK
+        let config = aws_config::defaults(aws_config::BehaviorVersion::latest()).load().await;
+        let sfn_client = aws_sdk_sfn::Client::new(&config);
+        
+        // Get Step Function ARN from environment variable
+        let step_function_arn = env::var("PDF_PROCESSING_STEP_FUNCTION_ARN")
+            .unwrap_or_else(|_| {
+                println!("Warning: PDF_PROCESSING_STEP_FUNCTION_ARN not set, using placeholder");
+                "arn:aws:states:REGION:ACCOUNT_ID:stateMachine:pdf-processing-workflow".to_string()
+            });
+        
+        // Construct the input payload
+        let payload = serde_json::json!({
+            "records": pdf_records
+        });
+        
+        // Start Step Function execution
+        match sfn_client.start_execution()
+            .state_machine_arn(step_function_arn)
+            .input(payload.to_string())
+            .send()
+            .await {
+                Ok(response) => {
+                    println!("Successfully triggered PDF processing workflow, execution ARN: {}", 
+                             response.execution_arn().to_string());
+                },
+                Err(e) => {
+                    println!("Failed to trigger PDF processing workflow: {}", e);
+                }
+            }
+    }
+    
     Ok(Response {
         records_count: records.len(),
         success: true,
@@ -115,7 +163,7 @@ async fn ensure_table_exists(pool: &Pool<Postgres>) -> Result<(), Error> {
         CREATE TABLE IF NOT EXISTS tender_records (
             id SERIAL PRIMARY KEY,
             title TEXT NOT NULL,
-            resource_id TEXT NOT NULL,
+            resource_id TEXT NOT NULL UNIQUE,
             ca TEXT NOT NULL,
             info TEXT NOT NULL,
             published TEXT NOT NULL,
@@ -143,6 +191,18 @@ async fn save_records(pool: &Pool<Postgres>, records: &[TenderRecord]) -> Result
             INSERT INTO tender_records 
             (title, resource_id, ca, info, published, deadline, procedure, status, pdf_url, awarddate, value, cycle)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+            ON CONFLICT (resource_id) DO UPDATE SET
+                title = EXCLUDED.title,
+                ca = EXCLUDED.ca,
+                info = EXCLUDED.info,
+                published = EXCLUDED.published,
+                deadline = EXCLUDED.deadline,
+                procedure = EXCLUDED.procedure,
+                status = EXCLUDED.status,
+                pdf_url = EXCLUDED.pdf_url,
+                awarddate = EXCLUDED.awarddate,
+                value = EXCLUDED.value,
+                cycle = EXCLUDED.cycle
             "#
         )
         .bind(&record.title)

@@ -1,5 +1,6 @@
 [workspace]
 members = [
-    "crates/postgres_dataload"
+    "crates/postgres_dataload",
+    "crates/pdf_processing"
 ]
 resolver = "2"

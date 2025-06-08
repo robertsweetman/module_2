@@ -1,0 +1,57 @@
+name: Build and Deploy Lambdas
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'crates/**'
+  workflow_dispatch:
+
+env:
+  LAMBDA_BUCKET: ${{ secrets.LAMBDA_BUCKET_NAME }}  # Set this as a GitHub secret
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Set up Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          
+      - name: Install cargo-lambda
+        run: pip install cargo-lambda
+        
+      - name: Build Lambdas
+        run: |
+          mkdir -p lambda-builds
+          cd crates/postgres_dataload
+          cargo lambda build --release --output-format zip
+          cp target/lambda/postgres-dataload/bootstrap.zip ../../../lambda-builds/postgres_dataload.zip
+          
+          cd ../pdf_processing
+          cargo lambda build --release --output-format zip
+          cp target/lambda/pdf-processing/bootstrap.zip ../../../lambda-builds/pdf_processing.zip
+      
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+          
+      - name: Verify S3 Bucket Exists
+        run: |
+          if ! aws s3api head-bucket --bucket $LAMBDA_BUCKET 2>/dev/null; then
+            echo "S3 bucket $LAMBDA_BUCKET doesn't exist or you don't have permission to access it."
+            exit 1
+          fi
+          
+      - name: Upload to S3
+        run: |
+          aws s3 cp lambda-builds/postgres_dataload.zip s3://$LAMBDA_BUCKET/
+          aws s3 cp lambda-builds/pdf_processing.zip s3://$LAMBDA_BUCKET/
