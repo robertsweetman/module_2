@@ -163,7 +163,7 @@ async fn ensure_table_exists(pool: &Pool<Postgres>) -> Result<(), Error> {
         CREATE TABLE IF NOT EXISTS tender_records (
             id SERIAL PRIMARY KEY,
             title TEXT NOT NULL,
-            resource_id TEXT NOT NULL,
+            resource_id TEXT NOT NULL UNIQUE,
             ca TEXT NOT NULL,
             info TEXT NOT NULL,
             published TEXT NOT NULL,
@@ -191,6 +191,18 @@ async fn save_records(pool: &Pool<Postgres>, records: &[TenderRecord]) -> Result
             INSERT INTO tender_records 
             (title, resource_id, ca, info, published, deadline, procedure, status, pdf_url, awarddate, value, cycle)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+            ON CONFLICT (resource_id) DO UPDATE SET
+                title = EXCLUDED.title,
+                ca = EXCLUDED.ca,
+                info = EXCLUDED.info,
+                published = EXCLUDED.published,
+                deadline = EXCLUDED.deadline,
+                procedure = EXCLUDED.procedure,
+                status = EXCLUDED.status,
+                pdf_url = EXCLUDED.pdf_url,
+                awarddate = EXCLUDED.awarddate,
+                value = EXCLUDED.value,
+                cycle = EXCLUDED.cycle
             "#
         )
         .bind(&record.title)
