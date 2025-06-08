@@ -44,3 +44,32 @@ resource "aws_db_subnet_group" "postgres" {
     Name = "Postgres subnet group"
   }
 }
+
+# Lambda security group
+resource "aws_security_group" "lambda_sg" {
+  name        = "lambda-sg"
+  description = "Security group for Lambda functions"
+  vpc_id      = data.aws_vpc.default.id
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "lambda-sg"
+  }
+}
+
+# Allow Lambda to connect to PostgreSQL
+resource "aws_security_group_rule" "lambda_to_postgres" {
+  type                     = "ingress"
+  from_port                = 5432
+  to_port                  = 5432
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.lambda_sg.id
+  security_group_id        = aws_security_group.postgres_sg.id
+  description              = "Allow Lambda functions to connect to PostgreSQL"
+}
