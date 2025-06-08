@@ -42,19 +42,62 @@ jobs:
           cd crates/postgres_dataload
           cargo lambda build --release --target x86_64-unknown-linux-musl
           
-          # Create zip
-          cd target/lambda/postgres_dataload
-          zip -j bootstrap.zip bootstrap
-          cp bootstrap.zip ../../../../../lambda-builds/postgres_dataload.zip
+          # Debug - show directory structure
+          echo "Current directory: $(pwd)"
+          echo "List of directories in current folder:"
+          ls -la
+          
+          echo "Target directory content:"
+          ls -la target || echo "No target directory"
+          
+          echo "Recursive search for bootstrap files:"
+          find . -name "bootstrap" -type f
+          
+          echo "Recursive search for lambda directory:"
+          find . -name "lambda" -type d
+          
+          # Create zip manually from wherever bootstrap is located
+          BOOTSTRAP_PATH=$(find . -name "bootstrap" -type f | head -1)
+          if [ -n "$BOOTSTRAP_PATH" ]; then
+            echo "Found bootstrap at: $BOOTSTRAP_PATH"
+            cp "$BOOTSTRAP_PATH" bootstrap
+            zip -j ../../../lambda-builds/postgres_dataload.zip bootstrap
+            rm bootstrap
+          else
+            echo "ERROR: Could not find bootstrap executable!"
+            exit 1
+          fi
           
           # Build pdf_processing
-          cd ../../../../pdf_processing
+          cd ../pdf_processing
           cargo lambda build --release --target x86_64-unknown-linux-musl
           
-          # Create zip
-          cd target/lambda/pdf_processing
-          zip -j bootstrap.zip bootstrap
-          cp bootstrap.zip ../../../../../lambda-builds/pdf_processing.zip
+          # Debug - show directory structure
+          echo "Current directory: $(pwd)"
+          echo "List of directories in current folder:"
+          ls -la
+          
+          echo "Target directory content:"
+          ls -la target || echo "No target directory"
+          
+          echo "Recursive search for bootstrap files:"
+          find . -name "bootstrap" -type f
+          
+          # Create zip manually from wherever bootstrap is located
+          BOOTSTRAP_PATH=$(find . -name "bootstrap" -type f | head -1)
+          if [ -n "$BOOTSTRAP_PATH" ]; then
+            echo "Found bootstrap at: $BOOTSTRAP_PATH"
+            cp "$BOOTSTRAP_PATH" bootstrap
+            zip -j ../../../lambda-builds/pdf_processing.zip bootstrap
+            rm bootstrap
+          else
+            echo "ERROR: Could not find bootstrap executable!"
+            exit 1
+          fi
+          
+          # Show what we have in lambda-builds
+          echo "Contents of lambda-builds directory:"
+          ls -la ../../../lambda-builds/
       
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v1
