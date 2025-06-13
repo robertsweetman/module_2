@@ -39,9 +39,21 @@ resource "aws_route_table" "private" {
   }
 }
 
-# Associate the route table with the Lambda subnets
+# Get private subnets (those that are not public)
+data "aws_subnets" "private" {
+  filter {
+    name   = "vpc-id"
+    values = [data.aws_vpc.default.id]
+  }
+  filter {
+    name   = "map-public-ip-on-launch"
+    values = ["false"]
+  }
+}
+
+# Associate the route table only with private subnets
 resource "aws_route_table_association" "private" {
-  count          = length(data.aws_subnets.all.ids)
-  subnet_id      = tolist(data.aws_subnets.all.ids)[count.index]
+  count          = length(data.aws_subnets.private.ids)
+  subnet_id      = tolist(data.aws_subnets.private.ids)[count.index]
   route_table_id = aws_route_table.private.id
 }
