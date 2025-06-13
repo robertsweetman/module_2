@@ -1,13 +1,13 @@
 # Output the database endpoint
-output "db_endpoint" {
-  description = "postgres database endpoint"
-  value = aws_db_instance.postgres.endpoint
-}
+# output "db_endpoint" {
+#   description = "postgres database endpoint"
+#   value = aws_db_instance.postgres.endpoint
+# }
 
-output "db_name" {
-  description = "postgres database name"
-  value = aws_db_instance.postgres.db_name
-}
+# output "db_name" {
+#   description = "postgres database name"
+#   value = aws_db_instance.postgres.db_name
+# }
 
 output "pdf_processing_step_function_arn" {
   description = "ARN of the PDF processing Step Function workflow"

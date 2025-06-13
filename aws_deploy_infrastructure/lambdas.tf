@@ -42,10 +42,10 @@ resource "aws_lambda_function" "postgres_dataload" {
   }
   
   environment {
-    variables = {
-      DATABASE_URL = "postgres://${var.db_admin_name}:${var.db_admin_pwd}@${aws_db_instance.postgres.endpoint}/${var.db_name}"
-      PDF_PROCESSING_STEP_FUNCTION_ARN = aws_sfn_state_machine.pdf_processing_workflow.arn
-    }
+    # variables = {
+    #   DATABASE_URL = "postgres://${var.db_admin_name}:${var.db_admin_pwd}@${aws_db_instance.postgres.endpoint}/${var.db_name}"
+    #   PDF_PROCESSING_STEP_FUNCTION_ARN = aws_sfn_state_machine.pdf_processing_workflow.arn
+    # }
   }
 
   vpc_config {
