@@ -2322,6 +2322,7 @@ dependencies = [
  "aws-config",
  "aws-sdk-sfn",
  "lambda_runtime",
+ "native-tls",
  "openssl",
  "reqwest",
  "scraper",
@@ -3057,6 +3058,7 @@ dependencies = [
  "indexmap",
  "log",
  "memchr",
+ "native-tls",
  "once_cell",
  "percent-encoding",
  "serde",
@@ -3064,6 +3066,8 @@ dependencies = [
  "sha2",
  "smallvec",
  "thiserror",
+ "tokio",
+ "tokio-stream",
  "tracing",
  "url",
 ]
@@ -3102,6 +3106,7 @@ dependencies = [
  "sqlx-postgres",
  "sqlx-sqlite",
  "syn",
+ "tokio",
  "url",
 ]
 
@@ -3427,6 +3432,7 @@ dependencies = [
  "bytes",
  "libc",
  "mio",
+ "parking_lot",
  "pin-project-lite",
  "signal-hook-registry",
  "socket2",
