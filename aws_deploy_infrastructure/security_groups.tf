@@ -4,11 +4,20 @@ resource "aws_security_group" "postgres_sg" {
   description = "Allow PostgreSQL inbound traffic"
 
   ingress {
-    description = "PostgreSQL"
+    description = "PostgreSQL from Lambda"
     from_port   = 5432
     to_port     = 5432
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]  # Consider restricting this in production
+    security_groups = [aws_security_group.lambda_sg.id]
+  }
+
+  # Allow direct internet access
+  ingress {
+    description = "PostgreSQL from Internet"
+    from_port   = 5432
+    to_port     = 5432
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   egress {
@@ -35,10 +44,17 @@ data "aws_subnets" "all" {
   }
 }
 
+data "aws_subnets" "public" {
+  filter {
+    name   = "vpc-id"
+    values = [data.aws_vpc.default.id]
+  }
+}
+
 # Create a subnet group for the RDS instance
 resource "aws_db_subnet_group" "postgres" {
   name       = "postgres-subnet-group"
-  subnet_ids = slice(tolist(data.aws_subnets.all.ids), 0, 2)  # Using first 2 subnets
+  subnet_ids = tolist(data.aws_subnets.public.ids)  # Use public subnets instead of all subnets
 
   tags = {
     Name = "Postgres subnet group"
