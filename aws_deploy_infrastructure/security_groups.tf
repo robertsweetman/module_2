@@ -32,7 +32,7 @@ resource "aws_security_group" "postgres_sg" {
   }
 }
 
-# Use default VPC and subnets
+# Use default VPC
 data "aws_vpc" "default" {
   default = true
 }
@@ -40,7 +40,7 @@ data "aws_vpc" "default" {
 # Create a subnet group for the RDS instance
 resource "aws_db_subnet_group" "postgres" {
   name       = "postgres-subnet-group"
-  subnet_ids = tolist(data.aws_subnets.all.ids)  # Using the all subnets from nat.tf
+  subnet_ids = tolist(data.aws_subnets.default.ids)
 
   tags = {
     Name = "Postgres subnet group"

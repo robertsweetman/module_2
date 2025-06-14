@@ -1,3 +1,11 @@
+# Get default VPC subnets
+data "aws_subnets" "default" {
+  filter {
+    name   = "vpc-id"
+    values = [data.aws_vpc.default.id]
+  }
+}
+
 resource "aws_lambda_function" "pdf_processing" {
   function_name = "pdf_processing"
   handler       = "bootstrap"
@@ -19,7 +27,7 @@ resource "aws_lambda_function" "pdf_processing" {
   }
 
   vpc_config {
-    subnet_ids         = data.aws_subnets.all.ids
+    subnet_ids         = data.aws_subnets.default.ids
     security_group_ids = [aws_security_group.lambda_sg.id]
   }
   
@@ -50,7 +58,7 @@ resource "aws_lambda_function" "postgres_dataload" {
   }
 
   vpc_config {
-    subnet_ids         = data.aws_subnets.all.ids
+    subnet_ids         = data.aws_subnets.default.ids
     security_group_ids = [aws_security_group.lambda_sg.id]
   }
   
