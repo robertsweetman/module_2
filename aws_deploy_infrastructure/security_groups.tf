@@ -37,17 +37,10 @@ data "aws_vpc" "default" {
   default = true
 }
 
-data "aws_subnets" "all" {
-  filter {
-    name   = "vpc-id"
-    values = [data.aws_vpc.default.id]
-  }
-}
-
 # Create a subnet group for the RDS instance
 resource "aws_db_subnet_group" "postgres" {
   name       = "postgres-subnet-group"
-  subnet_ids = tolist(data.aws_subnets.public.ids)  # Using the public subnets from nat.tf
+  subnet_ids = tolist(data.aws_subnets.all.ids)  # Using the all subnets from nat.tf
 
   tags = {
     Name = "Postgres subnet group"
