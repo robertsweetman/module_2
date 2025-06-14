@@ -53,7 +53,7 @@ data "aws_subnets" "private" {
 
 # Associate the route table only with private subnets
 resource "aws_route_table_association" "private" {
-  count          = length(data.aws_subnets.private.ids)
-  subnet_id      = tolist(data.aws_subnets.private.ids)[count.index]
+  count          = length(data.aws_subnets.all.ids)
+  subnet_id      = tolist(data.aws_subnets.all.ids)[count.index]
   route_table_id = aws_route_table.private.id
 }
