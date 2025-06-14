@@ -39,30 +39,24 @@ jobs:
 
       - name: Build Postgres Dataload
         run: |
-          cd crates/postgres_dataload
           cargo lambda build --release --target x86_64-unknown-linux-musl --package postgres_dataload
 
-      - name: Copy binary
+      - name: Copy Postgres Dataload binary
         run: |
           cp ./target/x86_64-unknown-linux-musl/release/postgres_dataload ./bootstrap
-
-      - name: Create zip
-        run: |
           zip postgres_dataload.zip bootstrap
+          rm bootstrap
 
       - name: Build PDF Processing
         run: |
-          cd crates/pdf_processing
           cargo lambda build --release --target x86_64-unknown-linux-musl --package pdf_processing
 
-      - name: Copy binary
+      - name: Copy PDF Processing binary
         run: |
           cp ./target/x86_64-unknown-linux-musl/release/pdf_processing ./bootstrap
-          
-      - name: Create zip
-        run: |
           zip pdf_processing.zip bootstrap
-          
+          rm bootstrap
+
       - name: Debug - List contents before upload
         run: |
           pwd
@@ -130,12 +124,10 @@ jobs:
 
       - name: Upload to S3
         run: |
-          cd crates/postgres_dataload
           aws s3 cp postgres_dataload.zip s3://$LAMBDA_BUCKET/postgres_dataload.zip
-          cd ../pdf_processing
           aws s3 cp pdf_processing.zip s3://$LAMBDA_BUCKET/pdf_processing.zip
           
-      - name: Update Lambda Function postgres_dataload
+      - name: Update Lambda Functions
         run: |
           aws lambda update-function-code --function-name postgres_dataload --s3-bucket $LAMBDA_BUCKET --s3-key postgres_dataload.zip
           aws lambda update-function-code --function-name pdf_processing --s3-bucket $LAMBDA_BUCKET --s3-key pdf_processing.zip
