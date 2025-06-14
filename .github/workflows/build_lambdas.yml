@@ -27,6 +27,11 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y pkg-config libssl-dev musl-tools perl
 
+      # Possibly not needed    
+      # - name: Install software properties common
+      #   run: |
+      #     sudo apt-get install -y software-properties-common
+
       - name: Install Zig (for cargo-lambda)
         run: |
           sudo snap install zig --classic --beta
