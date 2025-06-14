@@ -47,6 +47,22 @@ resource "aws_db_subnet_group" "postgres" {
   }
 }
 
+# Create a default route table for the VPC
+resource "aws_route_table" "default" {
+  vpc_id = data.aws_vpc.default.id
+
+  tags = {
+    Name = "default-route-table"
+  }
+}
+
+# Associate the default route table with all subnets
+resource "aws_route_table_association" "default" {
+  count          = length(data.aws_subnets.default.ids)
+  subnet_id      = tolist(data.aws_subnets.default.ids)[count.index]
+  route_table_id = aws_route_table.default.id
+}
+
 # Lambda security group
 resource "aws_security_group" "lambda_sg" {
   name        = "lambda-sg"
