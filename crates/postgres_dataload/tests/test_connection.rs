@@ -1,8 +1,8 @@
 use sqlx::postgres::PgPoolOptions;
 use std::env;
 
-#[tokio::main]
-async fn main() -> Result<(), sqlx::Error> {
+#[tokio::test]
+async fn test_database_connection() -> Result<(), sqlx::Error> {
     // Get database URL from environment variable
     let database_url = env::var("DATABASE_URL")
         .expect("DATABASE_URL must be set");
