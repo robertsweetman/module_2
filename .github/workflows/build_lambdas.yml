@@ -51,9 +51,9 @@ jobs:
           POSTGRES_BOOTSTRAP=$(find . -path "*postgres*" -name "bootstrap" -type f | head -1)
           if [ -n "$POSTGRES_BOOTSTRAP" ]; then
             echo "Found postgres bootstrap at: $POSTGRES_BOOTSTRAP"
-            cp "$POSTGRES_BOOTSTRAP" postgres_bootstrap
-            zip -j lambda-builds/postgres_dataload.zip postgres_bootstrap
-            rm postgres_bootstrap
+            cp "$POSTGRES_BOOTSTRAP" bootstrap
+            zip -j lambda-builds/postgres_dataload.zip bootstrap
+            rm bootstrap
           else
             echo "ERROR: Could not find postgres bootstrap executable!"
             exit 1
@@ -66,9 +66,7 @@ jobs:
           PDF_BOOTSTRAP=$(find . -path "*pdf*" -name "bootstrap" -type f | head -1)
           if [ -n "$PDF_BOOTSTRAP" ]; then
             echo "Found pdf bootstrap at: $PDF_BOOTSTRAP"
-            cp "$PDF_BOOTSTRAP" pdf_bootstrap
-            zip -j lambda-builds/pdf_processing.zip pdf_bootstrap
-            mv pdf_bootstrap bootstrap
+            cp "$PDF_BOOTSTRAP" bootstrap
             zip -j lambda-builds/pdf_processing.zip bootstrap
             rm bootstrap
           else
