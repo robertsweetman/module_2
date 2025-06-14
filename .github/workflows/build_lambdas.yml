@@ -41,6 +41,10 @@ jobs:
         run: |
           cargo lambda build --release --target x86_64-unknown-linux-musl --package postgres_dataload
 
+      - name: Debug - List build output
+        run: |
+          ls -l ./target/x86_64-unknown-linux-musl/release/
+
       - name: Copy Postgres Dataload binary
         run: |
           cp ./target/x86_64-unknown-linux-musl/release/postgres_dataload ./bootstrap
