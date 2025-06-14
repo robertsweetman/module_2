@@ -41,25 +41,34 @@ struct Response {
 }
 
 async fn function_handler(event: LambdaEvent<Request>) -> Result<Response, Error> {
+    println!("Starting function handler...");
+    
     // Get database connection
     let test_mode = event.payload.test_mode.unwrap_or(false);
+    println!("Test mode: {}", test_mode);
     
     let pool = if !test_mode {
+        println!("Attempting to connect to database...");
         let db_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+        println!("Database URL found, connecting...");
         
         let pool = PgPoolOptions::new()
             .max_connections(5)
             .connect(&db_url)
             .await?;
         
+        println!("Connected to database, ensuring table exists...");
         // Ensure table exists
         ensure_table_exists(&pool).await?;
+        println!("Table check complete");
         Some(pool)
     } else {
+        println!("Test mode: skipping database connection");
         None
     };
     
     // Setup HTTP client
+    println!("Setting up HTTP client...");
     let client = Client::new();
     let base_url = "https://www.etenders.gov.ie/epps/quickSearchAction.do";
     
@@ -71,34 +80,10 @@ async fn function_handler(event: LambdaEvent<Request>) -> Result<Response, Error
         event.payload.max_pages.unwrap_or(10) 
     };
     
+    println!("Fetching {} pages of data...", max_pages);
     // Get records
     let records = get_table_content(&client, base_url, max_pages, test_mode).await?;
-    
-    // In function_handler, after getting records but before saving
-    if test_mode {
-        println!("\n=== SAMPLE RECORDS ===");
-        for (i, record) in records.iter().enumerate() {
-            println!("Record #{}", i+1);
-            println!("  Title: {}", record.title);
-            println!("  Resource ID: {}", record.resource_id);
-            println!("  Contracting Authority: {}", record.ca);
-            println!("  Published: {}", record.published);
-            println!("  Deadline: {}", record.deadline);
-            println!("  Procedure: {}", record.procedure);
-            println!("  Status: {}", record.status);
-            println!("  Value: {}", record.value);
-            println!("  PDF URL: {}", record.pdf_url);
-            println!("  ---");
-        }
-        println!("=== END OF RECORDS ===\n");
-    }
-    
-    // Only save if not in test mode
-    if !test_mode {
-        if let Some(pool_ref) = &pool {
-            save_records(pool_ref, &records).await?;
-        }
-    }
+    println!("Successfully fetched {} records", records.len());
     
     // After processing the records but before returning the Response
     // Filter records with non-empty PDF URLs for processing
@@ -110,7 +95,12 @@ async fn function_handler(event: LambdaEvent<Request>) -> Result<Response, Error
         }))
         .collect();
 
-    if !pdf_records.is_empty() && !test_mode {
+    // Add this environment variable check
+    let disable_step_function = std::env::var("DISABLE_STEP_FUNCTION")
+        .unwrap_or_else(|_| "false".to_string()) == "true";
+
+    // Only run Step Function code if not disabled
+    if !pdf_records.is_empty() && !test_mode && !disable_step_function {
         println!("Found {} records with PDFs, triggering processing workflow", pdf_records.len());
         
         // Initialize AWS SDK
@@ -145,6 +135,16 @@ async fn function_handler(event: LambdaEvent<Request>) -> Result<Response, Error
             }
     }
     
+    // Only save if not in test mode
+    if !test_mode {
+        if let Some(pool_ref) = &pool {
+            println!("Saving records to database...");
+            save_records(pool_ref, &records).await?;
+            println!("Records saved successfully");
+        }
+    }
+    
+    println!("Function completed successfully");
     Ok(Response {
         records_count: records.len(),
         success: true,
