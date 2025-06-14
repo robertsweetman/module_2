@@ -37,9 +37,14 @@ jobs:
           pwd
           ls -R
 
-      - name: Build Postgres Dataload
+      - name: Build with cargo
         run: |
-          cargo lambda build --release --target x86_64-unknown-linux-musl --package postgres_dataload
+          cargo build --release --target x86_64-unknown-linux-musl --package postgres_dataload
+          find . -type f -name 'postgres_dataload' -exec ls -lh {} \;
+
+      # - name: Build Postgres Dataload
+      #   run: |
+      #     cargo lambda build --release --target x86_64-unknown-linux-musl --package postgres_dataload
 
       - name: Debug - List build output
         run: |
@@ -51,15 +56,15 @@ jobs:
           zip postgres_dataload.zip bootstrap
           rm bootstrap
 
-      - name: Build PDF Processing
-        run: |
-          cargo lambda build --release --target x86_64-unknown-linux-musl --package pdf_processing
+      # - name: Build PDF Processing
+      #   run: |
+      #     cargo lambda build --release --target x86_64-unknown-linux-musl --package pdf_processing
 
-      - name: Copy PDF Processing binary
-        run: |
-          cp ./target/x86_64-unknown-linux-musl/release/pdf_processing ./bootstrap
-          zip pdf_processing.zip bootstrap
-          rm bootstrap
+      # - name: Copy PDF Processing binary
+      #   run: |
+      #     cp ./target/x86_64-unknown-linux-musl/release/pdf_processing ./bootstrap
+      #     zip pdf_processing.zip bootstrap
+      #     rm bootstrap
 
       - name: Debug - List contents before upload
         run: |
@@ -129,12 +134,12 @@ jobs:
       - name: Upload to S3
         run: |
           aws s3 cp postgres_dataload.zip s3://$LAMBDA_BUCKET/postgres_dataload.zip
-          aws s3 cp pdf_processing.zip s3://$LAMBDA_BUCKET/pdf_processing.zip
+      # aws s3 cp pdf_processing.zip s3://$LAMBDA_BUCKET/pdf_processing.zip
           
       - name: Update Lambda Functions
         run: |
           aws lambda update-function-code --function-name postgres_dataload --s3-bucket $LAMBDA_BUCKET --s3-key postgres_dataload.zip
-          aws lambda update-function-code --function-name pdf_processing --s3-bucket $LAMBDA_BUCKET --s3-key pdf_processing.zip
+      # aws lambda update-function-code --function-name pdf_processing --s3-bucket $LAMBDA_BUCKET --s3-key pdf_processing.zip
           
 
           
