@@ -29,6 +29,8 @@ struct TenderRecord {
 struct Request {
     max_pages: Option<u32>,
     test_mode: Option<bool>,
+    start_page: Option<u32>,
+    offset: Option<u32>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -72,17 +74,25 @@ async fn function_handler(event: LambdaEvent<Request>) -> Result<Response, Error
     let client = Client::new();
     let base_url = "https://www.etenders.gov.ie/epps/quickSearchAction.do";
     
-    // Get test mode and max pages from request or default to 10
-    let max_pages = if test_mode { 
-        println!("Running in test mode - fetching only 1 page");
-        1 
-    } else { 
-        event.payload.max_pages.unwrap_or(10) 
+    // Get parameters from request
+    let start_page = event.payload.start_page.unwrap_or(1);
+    let offset = event.payload.offset.unwrap_or(0);
+    let max_pages = if test_mode {
+        1
+    } else {
+        event.payload.max_pages.unwrap_or(10)
+    };
+
+    // If offset is set, override start_page and max_pages to look back from page 1
+    let (actual_start, actual_end) = if offset > 0 {
+        (1, offset + 1)
+    } else {
+        (start_page, start_page + max_pages)
     };
     
     println!("Fetching {} pages of data...", max_pages);
     // Get records
-    let records = get_table_content(&client, base_url, max_pages, test_mode).await?;
+    let records = get_table_content(&client, base_url, actual_start, actual_end, test_mode).await?;
     println!("Successfully fetched {} records", records.len());
     
     // After processing the records but before returning the Response
@@ -227,13 +237,14 @@ async fn save_records(pool: &Pool<Postgres>, records: &[TenderRecord]) -> Result
 async fn get_table_content(
     client: &Client,
     base_url: &str,
-    total_pages: u32,
+    start_page: u32,
+    end_page: u32,
     test_mode: bool,
 ) -> Result<Vec<TenderRecord>, Error> {
     let mut records = Vec::new();
 
-    for page in 1..=total_pages {
-        println!("Fetching page {}/{}", page, total_pages);
+    for page in start_page..end_page {
+        println!("Fetching page {}/{}", page, end_page);
         let url = format!("{}?d-3680175-p={}&searchType=cftFTS&latest=true", base_url, page);
         let response = client.get(&url).send().await?;
         let body = response.text().await?;
