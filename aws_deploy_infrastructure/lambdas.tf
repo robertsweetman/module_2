@@ -4,8 +4,8 @@ resource "aws_lambda_function" "pdf_processing" {
   runtime       = "provided.al2"
   role          = aws_iam_role.lambda_role.arn
   
-  s3_bucket     = aws_s3_bucket.lambda_bucket.bucket
-  s3_key        = "pdf_processing/bootstrap.zip"
+  s3_bucket     = aws_s3_bucket.lambda_bucket.id
+  s3_key        = "pdf_processing.zip"
 
   depends_on = [aws_s3_bucket.lambda_bucket]
   lifecycle {
@@ -33,8 +33,8 @@ resource "aws_lambda_function" "postgres_dataload" {
   runtime       = "provided.al2"
   role          = aws_iam_role.lambda_role.arn
   
-  s3_bucket     = aws_s3_bucket.lambda_bucket.bucket
-  s3_key        = "postgres_dataload/bootstrap.zip"
+  s3_bucket     = aws_s3_bucket.lambda_bucket.id
+  s3_key        = "postgres_dataload.zip"
 
   depends_on = [aws_s3_bucket.lambda_bucket]
   lifecycle {
@@ -43,6 +43,7 @@ resource "aws_lambda_function" "postgres_dataload" {
   
   environment {
     variables = {
+      RUST_BACKTRACE  = "1"
       DATABASE_URL = "postgres://${var.db_admin_name}:${var.db_admin_pwd}@${aws_db_instance.postgres.endpoint}/${var.db_name}"
       PDF_PROCESSING_STEP_FUNCTION_ARN = aws_sfn_state_machine.pdf_processing_workflow.arn
     }

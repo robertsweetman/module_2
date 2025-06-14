@@ -31,52 +31,88 @@ jobs:
         run: |
           pip install cargo-lambda
           cargo lambda --version
-        
-      - name: Build Lambdas
+
+      - name: Debug - List contents before build
         run: |
-          mkdir -p lambda-builds
-          
-          # Check workspace root structure
-          echo "Workspace root directory structure:"
-          ls -la
-          
-          # Build postgres_dataload
+          pwd
+          ls -R
+
+      - name: Build Postgres Dataload
+        run: |
+          cd crates/postgres_dataload
           cargo lambda build --release --target x86_64-unknown-linux-musl --package postgres_dataload
-          
-          # Search for bootstrap in workspace target
-          echo "Searching for bootstrap files in workspace:"
-          find . -name "bootstrap" -type f
-          
-          # Create zip manually from wherever bootstrap is located
-          POSTGRES_BOOTSTRAP=$(find . -path "*postgres*" -name "bootstrap" -type f | head -1)
-          if [ -n "$POSTGRES_BOOTSTRAP" ]; then
-            echo "Found postgres bootstrap at: $POSTGRES_BOOTSTRAP"
-            cp "$POSTGRES_BOOTSTRAP" bootstrap
-            zip -j lambda-builds/postgres_dataload.zip bootstrap
-            rm bootstrap
-          else
-            echo "ERROR: Could not find postgres bootstrap executable!"
-            exit 1
-          fi
-          
-          # Build pdf_processing
+
+      - name: Copy binary
+        run: |
+          cp ./target/x86_64-unknown-linux-musl/release/postgres_dataload ./bootstrap
+
+      - name: Create zip
+        run: |
+          zip postgres_dataload.zip bootstrap
+
+      - name: Build PDF Processing
+        run: |
+          cd crates/pdf_processing
           cargo lambda build --release --target x86_64-unknown-linux-musl --package pdf_processing
+
+      - name: Copy binary
+        run: |
+          cp ./target/x86_64-unknown-linux-musl/release/pdf_processing ./bootstrap
           
-          # Create zip manually from wherever bootstrap is located
-          PDF_BOOTSTRAP=$(find . -path "*pdf*" -name "bootstrap" -type f | head -1)
-          if [ -n "$PDF_BOOTSTRAP" ]; then
-            echo "Found pdf bootstrap at: $PDF_BOOTSTRAP"
-            cp "$PDF_BOOTSTRAP" bootstrap
-            zip -j lambda-builds/pdf_processing.zip bootstrap
-            rm bootstrap
-          else
-            echo "ERROR: Could not find pdf bootstrap executable!"
-            exit 1
-          fi
+      - name: Create zip
+        run: |
+          zip pdf_processing.zip bootstrap
           
-          # Show what we have in lambda-builds
-          echo "Contents of lambda-builds directory:"
-          ls -la lambda-builds/
+      - name: Debug - List contents before upload
+        run: |
+          pwd
+          ls -R
+
+      # - name: Build Lambdas
+      #   run: |
+      #     mkdir -p lambda-builds
+          
+      #     # Check workspace root structure
+      #     echo "Workspace root directory structure:"
+      #     ls -la
+          
+      #     # Build postgres_dataload
+      #     cargo lambda build --release --target x86_64-unknown-linux-musl --package postgres_dataload
+          
+      #     # Search for bootstrap in workspace target
+      #     echo "Searching for bootstrap files in workspace:"
+      #     find . -name "bootstrap" -type f
+          
+      #     # Create zip manually from wherever bootstrap is located
+      #     POSTGRES_BOOTSTRAP=$(find . -path "*postgres*" -name "bootstrap" -type f | head -1)
+      #     if [ -n "$POSTGRES_BOOTSTRAP" ]; then
+      #       echo "Found postgres bootstrap at: $POSTGRES_BOOTSTRAP"
+      #       cp "$POSTGRES_BOOTSTRAP" bootstrap
+      #       zip -j lambda-builds/postgres_dataload.zip bootstrap
+      #       rm bootstrap
+      #     else
+      #       echo "ERROR: Could not find postgres bootstrap executable!"
+      #       exit 1
+      #     fi
+          
+      #     # Build pdf_processing
+      #     cargo lambda build --release --target x86_64-unknown-linux-musl --package pdf_processing
+          
+      #     # Create zip manually from wherever bootstrap is located
+      #     PDF_BOOTSTRAP=$(find . -path "*pdf*" -name "bootstrap" -type f | head -1)
+      #     if [ -n "$PDF_BOOTSTRAP" ]; then
+      #       echo "Found pdf bootstrap at: $PDF_BOOTSTRAP"
+      #       cp "$PDF_BOOTSTRAP" bootstrap
+      #       zip -j lambda-builds/pdf_processing.zip bootstrap
+      #       rm bootstrap
+      #     else
+      #       echo "ERROR: Could not find pdf bootstrap executable!"
+      #       exit 1
+      #     fi
+          
+      #     # Show what we have in lambda-builds
+      #     echo "Contents of lambda-builds directory:"
+      #     ls -la lambda-builds/
       
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v2
@@ -84,15 +120,29 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
-          
+
       - name: Verify S3 Bucket Exists
         run: |
           if ! aws s3api head-bucket --bucket $LAMBDA_BUCKET 2>/dev/null; then
             echo "S3 bucket $LAMBDA_BUCKET doesn't exist or you don't have permission to access it."
             exit 1
           fi
-          
+
       - name: Upload to S3
         run: |
-          aws s3 cp lambda-builds/postgres_dataload.zip s3://$LAMBDA_BUCKET/postgres_dataload/bootstrap.zip
-          aws s3 cp lambda-builds/pdf_processing.zip s3://$LAMBDA_BUCKET/pdf_processing/bootstrap.zip
+          cd crates/postgres_dataload
+          aws s3 cp postgres_dataload.zip s3://$LAMBDA_BUCKET/postgres_dataload.zip
+          cd ../pdf_processing
+          aws s3 cp pdf_processing.zip s3://$LAMBDA_BUCKET/pdf_processing.zip
+          
+      - name: Update Lambda Function postgres_dataload
+        run: |
+          aws lambda update-function-code --function-name postgres_dataload --s3-bucket $LAMBDA_BUCKET --s3-key postgres_dataload.zip
+          aws lambda update-function-code --function-name pdf_processing --s3-bucket $LAMBDA_BUCKET --s3-key pdf_processing.zip
+          
+
+          
+      # - name: Upload to S3
+      #   run: |
+      #     aws s3 cp lambda-builds/postgres_dataload.zip s3://$LAMBDA_BUCKET/postgres_dataload/bootstrap.zip
+      #     aws s3 cp lambda-builds/pdf_processing.zip s3://$LAMBDA_BUCKET/pdf_processing/bootstrap.zip
