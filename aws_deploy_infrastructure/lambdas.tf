@@ -19,7 +19,7 @@ resource "aws_lambda_function" "pdf_processing" {
   }
 
   vpc_config {
-    subnet_ids         = data.aws_subnets.private.ids
+    subnet_ids         = data.aws_subnets.all.ids
     security_group_ids = [aws_security_group.lambda_sg.id]
   }
   
@@ -50,7 +50,7 @@ resource "aws_lambda_function" "postgres_dataload" {
   }
 
   vpc_config {
-    subnet_ids         = data.aws_subnets.private.ids
+    subnet_ids         = data.aws_subnets.all.ids
     security_group_ids = [aws_security_group.lambda_sg.id]
   }
   
