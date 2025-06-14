@@ -96,5 +96,5 @@ jobs:
           
       - name: Upload to S3
         run: |
-          aws s3 cp lambda-builds/postgres_dataload.zip s3://$LAMBDA_BUCKET/
-          aws s3 cp lambda-builds/pdf_processing.zip s3://$LAMBDA_BUCKET/
+          aws s3 cp lambda-builds/postgres_dataload.zip s3://$LAMBDA_BUCKET/postgres_dataload/bootstrap.zip
+          aws s3 cp lambda-builds/pdf_processing.zip s3://$LAMBDA_BUCKET/pdf_processing/bootstrap.zip

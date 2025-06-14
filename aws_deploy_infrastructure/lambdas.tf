@@ -1,11 +1,11 @@
 resource "aws_lambda_function" "pdf_processing" {
-  function_name = "pdf-processing"
+  function_name = "pdf_processing"
   handler       = "bootstrap"
   runtime       = "provided.al2"
   role          = aws_iam_role.lambda_role.arn
   
   s3_bucket     = aws_s3_bucket.lambda_bucket.bucket
-  s3_key        = "pdf_processing.zip"
+  s3_key        = "pdf_processing/bootstrap.zip"
 
   depends_on = [aws_s3_bucket.lambda_bucket]
   lifecycle {
@@ -28,13 +28,13 @@ resource "aws_lambda_function" "pdf_processing" {
 }
 
 resource "aws_lambda_function" "postgres_dataload" {
-  function_name = "postgres-dataload"
+  function_name = "postgres_dataload"
   handler       = "bootstrap"
   runtime       = "provided.al2"
   role          = aws_iam_role.lambda_role.arn
   
   s3_bucket     = aws_s3_bucket.lambda_bucket.bucket
-  s3_key        = "postgres_dataload.zip"
+  s3_key        = "postgres_dataload/bootstrap.zip"
 
   depends_on = [aws_s3_bucket.lambda_bucket]
   lifecycle {
