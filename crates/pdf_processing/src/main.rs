@@ -1,13 +1,30 @@
-use lambda_runtime::{service_fn, LambdaEvent, Error};
+use lambda_runtime::{service_fn, LambdaEvent, Error, run};
+use once_cell::sync::Lazy;
+use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use sqlx::{postgres::PgPoolOptions, Pool, Postgres};
 use std::env;
-use reqwest::Client;
 use std::fs;
+use std::time::Duration;
+use tracing::info;
 
 // Import the function from the lib.rs file
-use pdf_processing::extract_text_from_pdf;
-use pdf_processing::extract_codes;
+use pdf_processing::{extract_codes, extract_text_from_pdf};
+
+// --- Static clients for performance and stability ---
+// Create a single, static HTTP client to be reused across all invocations.
+static HTTP_CLIENT: Lazy<Client> = Lazy::new(Client::new);
+
+// Create a static, lazy-initialized database pool.
+// It will only be created on the first database call and then reused.
+static DB_POOL: Lazy<Pool<Postgres>> = Lazy::new(|| {
+    let db_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+    PgPoolOptions::new()
+        .max_connections(10) // Increased for robustness
+        .acquire_timeout(Duration::from_secs(5))
+        .connect_lazy(&db_url)
+        .expect("Failed to create lazy database pool")
+});
 
 #[derive(Debug, Serialize, Deserialize)]
 struct PdfProcessingRequest {
@@ -24,72 +41,46 @@ struct Response {
 }
 
 async fn function_handler(event: LambdaEvent<PdfProcessingRequest>) -> Result<Response, Error> {
-    // Extract data from event
     let resource_id = event.payload.resource_id;
     let pdf_url = event.payload.pdf_url;
     
-    tracing::info!("Processing PDF for resource_id: {}", resource_id);
-    
+    info!(resource_id = %resource_id, "Processing PDF");
+
     if pdf_url.is_empty() {
         return Ok(Response {
-            resource_id: resource_id.clone(),
+            resource_id,
             success: false,
             message: "No PDF URL provided".to_string(),
             text_length: None,
         });
     }
-    
-    // Get database connection
-    let db_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
-    
-    let pool = PgPoolOptions::new()
-        .max_connections(5)
-        .connect(&db_url)
-        .await?;
-    
-    // Ensure table exists
-    ensure_table_exists(&pool).await?;
-    
-    // Download PDF
-    let client = Client::new();
-    tracing::info!("Downloading PDF from: {}", pdf_url);
-    
-    let pdf_bytes = match client.get(&pdf_url).send().await {
-        Ok(response) => {
-            if !response.status().is_success() {
+
+    // Download PDF using the static client
+    info!(pdf_url = %pdf_url, "Downloading PDF");
+    let pdf_bytes = match HTTP_CLIENT.get(&pdf_url).send().await {
+        Ok(response) => match response.error_for_status() {
+            Ok(resp) => resp.bytes().await?,
+            Err(e) => {
                 return Ok(Response {
                     resource_id,
                     success: false,
-                    message: format!("Failed to download PDF: HTTP {}", response.status()),
+                    message: format!("Failed to download PDF: HTTP {}", e.status().unwrap_or_default()),
                     text_length: None,
                 });
-            }
-            
-            match response.bytes().await {
-                Ok(bytes) => bytes,
-                Err(e) => {
-                    return Ok(Response {
-                        resource_id,
-                        success: false,
-                        message: format!("Failed to read PDF bytes: {}", e),
-                        text_length: None,
-                    });
-                }
             }
         },
         Err(e) => {
             return Ok(Response {
                 resource_id,
                 success: false,
-                message: format!("Failed to download PDF: {}", e),
+                message: format!("Failed to send request: {}", e),
                 text_length: None,
             });
         }
     };
     
     // Extract text from PDF
-    tracing::info!("Extracting text from PDF ({} bytes)", pdf_bytes.len());
-    
+    info!(bytes = pdf_bytes.len(), "Extracting text from PDF");
     let pdf_text = match extract_text_from_pdf(&pdf_bytes) {
         Ok(text) => text,
         Err(e) => {
@@ -104,7 +95,6 @@ async fn function_handler(event: LambdaEvent<PdfProcessingRequest>) -> Result<Re
     
     // Load codes from file
     let codes_text = fs::read_to_string("codes.txt").unwrap_or_default();
-    // Keep only the numeric code before the first comma on each line
     let codes: Vec<String> = codes_text
         .lines()
         .filter_map(|line| line.split(',').next())
@@ -116,10 +106,10 @@ async fn function_handler(event: LambdaEvent<PdfProcessingRequest>) -> Result<Re
     let detected_codes = extract_codes(&pdf_text, &codes);
     let codes_count = detected_codes.len();
     
-    tracing::info!("Detected {} codes in PDF", codes_count);
+    info!(codes_count, "Detected codes in PDF");
     
-    // Store in pdf_content table with codes
-    match store_pdf_content_with_codes(&pool, &resource_id, &pdf_text, &detected_codes).await {
+    // Store in pdf_content table using the static pool
+    match store_pdf_content_with_codes(&DB_POOL, &resource_id, &pdf_text, &detected_codes).await {
         Ok(_) => {
             Ok(Response {
                 resource_id,
@@ -191,5 +181,18 @@ async fn store_pdf_content_with_codes(
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
-    lambda_runtime::run(service_fn(function_handler)).await
+    // This runs once per container startup.
+    // It's the standard and correct way to initialize tracing in a Lambda.
+    tracing_subscriber::fmt()
+        .with_max_level(tracing::Level::INFO)
+        // Disables printing the name of the module in every log line.
+        .with_target(false)
+        // Disabling time is handy because CloudWatch will add the ingestion time.
+        .without_time()
+        .init();
+
+    // Ensure the database table exists on cold start
+    ensure_table_exists(&DB_POOL).await?;
+
+    run(service_fn(function_handler)).await
 }

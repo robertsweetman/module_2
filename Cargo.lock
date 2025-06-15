@@ -2172,6 +2172,7 @@ name = "pdf_processing"
 version = "0.1.0"
 dependencies = [
  "lambda_runtime",
+ "once_cell",
  "openssl",
  "pdf-extract",
  "reqwest",
