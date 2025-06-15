@@ -25,9 +25,6 @@ struct Response {
 }
 
 async fn function_handler(event: LambdaEvent<PdfProcessingRequest>) -> Result<Response, Error> {
-    // Initialize tracing only once; ignore error if already set
-    let _ = tracing_subscriber::fmt::try_init();
-    
     // Extract data from event
     let resource_id = event.payload.resource_id;
     let pdf_url = event.payload.pdf_url;
