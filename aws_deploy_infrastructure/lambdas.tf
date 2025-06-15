@@ -22,6 +22,7 @@ resource "aws_lambda_function" "pdf_processing" {
   
   environment {
     variables = {
+      RUST_BACKTRACE  = "1"
       DATABASE_URL = "postgres://${var.db_admin_name}:${var.db_admin_pwd}@${aws_db_instance.postgres.endpoint}/${var.db_name}"
     }
   }
