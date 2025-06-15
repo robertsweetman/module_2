@@ -107,11 +107,14 @@ async fn function_handler(event: LambdaEvent<PdfProcessingRequest>) -> Result<Re
     };
     
     // Load codes from file
-    let codes_text = match fs::read_to_string("codes.txt") {
-        Ok(text) => text,
-        Err(_) => String::new(), // No codes if file not found
-    };
-    let codes: Vec<String> = codes_text.lines().map(|s| s.to_string()).collect();
+    let codes_text = fs::read_to_string("codes.txt").unwrap_or_default();
+    // Keep only the numeric code before the first comma on each line
+    let codes: Vec<String> = codes_text
+        .lines()
+        .filter_map(|line| line.split(',').next())
+        .map(|code| code.trim().to_string())
+        .filter(|code| !code.is_empty())
+        .collect();
     
     // Detect codes in the PDF text
     let detected_codes = extract_codes(&pdf_text, &codes);
