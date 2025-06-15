@@ -6,7 +6,7 @@ use sqlx::{postgres::PgPoolOptions, Pool, Postgres};
 use std::env;
 use std::fs;
 use std::time::Duration;
-use tracing_subscriber::{Registry, layer::SubscriberExt};
+use tracing_subscriber::registry::Registry;
 use std::sync::Once;
 
 // Import the function from the lib.rs file
