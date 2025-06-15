@@ -26,11 +26,6 @@ resource "aws_lambda_function" "pdf_processing" {
     }
   }
 
-  vpc_config {
-    subnet_ids         = data.aws_subnets.default.ids
-    security_group_ids = [aws_security_group.lambda_sg.id]
-  }
-  
   timeout = 900
   memory_size = 1024
 }
@@ -57,11 +52,6 @@ resource "aws_lambda_function" "postgres_dataload" {
     }
   }
 
-  vpc_config {
-    subnet_ids         = data.aws_subnets.default.ids
-    security_group_ids = [aws_security_group.lambda_sg.id]
-  }
-  
   timeout = 900
   memory_size = 1024
 }
