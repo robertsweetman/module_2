@@ -1,5 +1,5 @@
 use lambda_runtime::{service_fn, LambdaEvent, Error, run};
-use once_cell::sync::{Lazy, Once};
+use once_cell::sync::Lazy;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use sqlx::{postgres::PgPoolOptions, Pool, Postgres};
@@ -7,6 +7,7 @@ use std::env;
 use std::fs;
 use std::time::Duration;
 use tracing_subscriber::{Registry, layer::SubscriberExt};
+use std::sync::Once;
 
 // Import the function from the lib.rs file
 use pdf_processing::{extract_codes, extract_text_from_pdf};
