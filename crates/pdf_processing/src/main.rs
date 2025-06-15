@@ -6,7 +6,6 @@ use sqlx::{postgres::PgPoolOptions, Pool, Postgres};
 use std::env;
 use std::fs;
 use std::time::Duration;
-use tracing::info;
 
 // Import the function from the lib.rs file
 use pdf_processing::{extract_codes, extract_text_from_pdf};
@@ -44,7 +43,7 @@ async fn function_handler(event: LambdaEvent<PdfProcessingRequest>) -> Result<Re
     let resource_id = event.payload.resource_id;
     let pdf_url = event.payload.pdf_url;
     
-    info!(resource_id = %resource_id, "Processing PDF");
+    println!("Processing PDF for resource_id: {}", resource_id);
 
     if pdf_url.is_empty() {
         return Ok(Response {
@@ -56,7 +55,7 @@ async fn function_handler(event: LambdaEvent<PdfProcessingRequest>) -> Result<Re
     }
 
     // Download PDF using the static client
-    info!(pdf_url = %pdf_url, "Downloading PDF");
+    println!("Downloading PDF from: {}", pdf_url);
     let pdf_bytes = match HTTP_CLIENT.get(&pdf_url).send().await {
         Ok(response) => match response.error_for_status() {
             Ok(resp) => resp.bytes().await?,
@@ -80,7 +79,7 @@ async fn function_handler(event: LambdaEvent<PdfProcessingRequest>) -> Result<Re
     };
     
     // Extract text from PDF
-    info!(bytes = pdf_bytes.len(), "Extracting text from PDF");
+    println!("Extracting text from PDF ({} bytes)", pdf_bytes.len());
     let pdf_text = match extract_text_from_pdf(&pdf_bytes) {
         Ok(text) => text,
         Err(e) => {
@@ -106,7 +105,7 @@ async fn function_handler(event: LambdaEvent<PdfProcessingRequest>) -> Result<Re
     let detected_codes = extract_codes(&pdf_text, &codes);
     let codes_count = detected_codes.len();
     
-    info!(codes_count, "Detected codes in PDF");
+    println!("Detected {} codes in PDF", codes_count);
     
     // Store in pdf_content table using the static pool
     match store_pdf_content_with_codes(&DB_POOL, &resource_id, &pdf_text, &detected_codes).await {
