@@ -112,4 +112,14 @@ jobs:
           if [[ "${{ inputs.lambda }}" == "pdf_processing" || "${{ inputs.lambda }}" == "all" ]]; then
             aws lambda update-function-code --function-name pdf_processing --s3-bucket $LAMBDA_BUCKET --s3-key pdf_processing.zip
           fi
+
+      - name: Wait for Postgres Dataload Update
+        if: ${{ inputs.lambda == 'all' || inputs.lambda == 'postgres_dataload' }}
+        run: |
+          aws lambda wait function-updated --function-name postgres_dataload
+
+      - name: Wait for PDF Processing Update
+        if: ${{ inputs.lambda == 'all' || inputs.lambda == 'pdf_processing' }}
+        run: |
+          aws lambda wait function-updated --function-name pdf_processing
       

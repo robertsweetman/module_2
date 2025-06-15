@@ -191,6 +191,8 @@ async fn main() -> Result<(), Error> {
         .without_time()
         .init();
 
+    info!("***** LOGGER INITIALIZED, V4 *****");
+
     // Ensure the database table exists on cold start
     ensure_table_exists(&DB_POOL).await?;
 
