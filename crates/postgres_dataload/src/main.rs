@@ -246,12 +246,11 @@ async fn get_table_content(
     for page in start_page..end_page {
         println!("Fetching page {}/{}", page, end_page);
         let url = format!("{}?d-3680175-p={}&searchType=cftFTS&latest=true", base_url, page);
-        let lookup = tokio::net::lookup_host("www.etenders.gov.ie:443").await;
-        println!("DNS lookup result: {:?}", lookup);
         let response = match client.get(&url).send().await {
             Ok(resp) => resp,
             Err(e) => {
-                println!("HTTP request to {} failed: {:?}", url, e);
+                let error_msg = format!("HTTP request to {} failed: {:?}", url, e);
+                println!("{}", error_msg);
                 return Err(Box::new(e).into());
             }
         };
