@@ -6,6 +6,16 @@ on:
   #   paths:
   #     - 'crates/**'
   workflow_dispatch:
+    inputs:
+      lambda:
+        description: "Lambda to build/deploy (all | postgres_dataload | pdf_processing)"
+        required: true
+        default: "all"
+        type: choice
+        options:
+          - all
+          - postgres_dataload
+          - pdf_processing
 
 env:
   LAMBDA_BUCKET: ${{ secrets.LAMBDA_BUCKET_NAME }}  # Set this as a GitHub secret
@@ -27,11 +37,6 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y pkg-config libssl-dev musl-tools perl
 
-      # Possibly not needed    
-      # - name: Install software properties common
-      #   run: |
-      #     sudo apt-get install -y software-properties-common
-
       - name: Install Zig (for cargo-lambda)
         run: |
           sudo snap install zig --classic --beta
@@ -46,20 +51,24 @@ jobs:
           ls -R
 
       - name: Build Postgres Dataload Lambda
+        if: ${{ inputs.lambda == 'all' || inputs.lambda == 'postgres_dataload' }}
         run: |
           cargo lambda build --release --target x86_64-unknown-linux-musl --package postgres_dataload
 
       - name: Build PDF Processing Lambda
+        if: ${{ inputs.lambda == 'all' || inputs.lambda == 'pdf_processing' }}
         run: |
           cargo lambda build --release --target x86_64-unknown-linux-musl --package pdf_processing
 
       - name: Package Postgres Dataload Lambda
+        if: ${{ inputs.lambda == 'all' || inputs.lambda == 'postgres_dataload' }}
         run: |
           cp ./target/lambda/postgres_dataload/bootstrap ./bootstrap
           zip postgres_dataload.zip bootstrap
           rm bootstrap
 
       - name: Package PDF Processing Lambda
+        if: ${{ inputs.lambda == 'all' || inputs.lambda == 'pdf_processing' }}
         run: |
           cp ./target/lambda/pdf_processing/bootstrap ./bootstrap
           zip pdf_processing.zip bootstrap
@@ -85,12 +94,22 @@ jobs:
           fi
 
       - name: Upload to S3
+        if: ${{ inputs.lambda == 'all' || inputs.lambda == 'postgres_dataload' }}
         run: |
-          aws s3 cp postgres_dataload.zip s3://$LAMBDA_BUCKET/postgres_dataload.zip
-          aws s3 cp pdf_processing.zip s3://$LAMBDA_BUCKET/pdf_processing.zip
-          
+          if [[ "${{ inputs.lambda }}" == "postgres_dataload" || "${{ inputs.lambda }}" == "all" ]]; then
+            aws s3 cp postgres_dataload.zip s3://$LAMBDA_BUCKET/postgres_dataload.zip
+          fi
+          if [[ "${{ inputs.lambda }}" == "pdf_processing" || "${{ inputs.lambda }}" == "all" ]]; then
+            aws s3 cp pdf_processing.zip s3://$LAMBDA_BUCKET/pdf_processing.zip
+          fi
+
       - name: Update Lambda Functions
+        if: ${{ inputs.lambda == 'all' || inputs.lambda == 'postgres_dataload' || inputs.lambda == 'pdf_processing' }}
         run: |
-          aws lambda update-function-code --function-name postgres_dataload --s3-bucket $LAMBDA_BUCKET --s3-key postgres_dataload.zip
-          aws lambda update-function-code --function-name pdf_processing --s3-bucket $LAMBDA_BUCKET --s3-key pdf_processing.zip
+          if [[ "${{ inputs.lambda }}" == "postgres_dataload" || "${{ inputs.lambda }}" == "all" ]]; then
+            aws lambda update-function-code --function-name postgres_dataload --s3-bucket $LAMBDA_BUCKET --s3-key postgres_dataload.zip
+          fi
+          if [[ "${{ inputs.lambda }}" == "pdf_processing" || "${{ inputs.lambda }}" == "all" ]]; then
+            aws lambda update-function-code --function-name pdf_processing --s3-bucket $LAMBDA_BUCKET --s3-key pdf_processing.zip
+          fi
       
