@@ -1,11 +1,12 @@
 use lambda_runtime::{service_fn, LambdaEvent, Error, run};
-use once_cell::sync::Lazy;
+use once_cell::sync::{Lazy, Once};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use sqlx::{postgres::PgPoolOptions, Pool, Postgres};
 use std::env;
 use std::fs;
 use std::time::Duration;
+use tracing_subscriber::{Registry, layer::SubscriberExt};
 
 // Import the function from the lib.rs file
 use pdf_processing::{extract_codes, extract_text_from_pdf};
@@ -24,6 +25,16 @@ static DB_POOL: Lazy<Pool<Postgres>> = Lazy::new(|| {
         .connect_lazy(&db_url)
         .expect("Failed to create lazy database pool")
 });
+
+static INIT_TRACING: Once = Once::new();
+
+fn install_noop_subscriber() {
+    INIT_TRACING.call_once(|| {
+        // a bare registry does nothing but counts as "set"
+        let subscriber = Registry::default();
+        let _ = tracing::subscriber::set_global_default(subscriber);
+    });
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 struct PdfProcessingRequest {
@@ -180,7 +191,7 @@ async fn store_pdf_content_with_codes(
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
-    // Ensure the table exists (cold start only)
+    install_noop_subscriber();       
     ensure_table_exists(&DB_POOL).await?;
     run(service_fn(function_handler)).await
 }
