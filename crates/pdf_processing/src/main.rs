@@ -3,7 +3,6 @@ use serde::{Deserialize, Serialize};
 use sqlx::{postgres::PgPoolOptions, Pool, Postgres};
 use std::env;
 use reqwest::Client;
-use tracing_subscriber;
 use std::fs;
 
 // Import the function from the lib.rs file
