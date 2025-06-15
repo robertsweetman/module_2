@@ -181,20 +181,7 @@ async fn store_pdf_content_with_codes(
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
-    // This runs once per container startup.
-    // It's the standard and correct way to initialize tracing in a Lambda.
-    tracing_subscriber::fmt()
-        .with_max_level(tracing::Level::INFO)
-        // Disables printing the name of the module in every log line.
-        .with_target(false)
-        // Disabling time is handy because CloudWatch will add the ingestion time.
-        .without_time()
-        .init();
-
-    info!("***** LOGGER INITIALIZED, V4 *****");
-
-    // Ensure the database table exists on cold start
+    // Ensure the table exists (cold start only)
     ensure_table_exists(&DB_POOL).await?;
-
     run(service_fn(function_handler)).await
 }
