@@ -1,0 +1,49 @@
+1. Check the Lambda function's network configuration:
+   - Navigate to the Lambda function 'postgres_dataload' in the AWS Console
+   - Go to the 'Configuration' tab and select 'VPC'
+   - Verify that the function is associated with the correct VPC, subnets, and security group
+
+2. Review the security group settings:
+   - Go to the EC2 dashboard in the AWS Console
+   - Navigate to 'Security Groups' and find the security group 'sg-0b1904a991eaccc33'
+   - Ensure that the outbound rules allow the necessary traffic for the Lambda function to communicate with external services
+
+3. Check the Lambda function's IAM role permissions:
+   - In the Lambda function configuration, go to the 'Configuration' tab and select 'Permissions'
+   - Click on the role name 'lambda_execution_role' to view its details in the IAM console
+   - Review the attached policies and ensure they provide the necessary permissions for the function to access required AWS services
+
+4. Verify the Lambda function's environment variables:
+   - In the Lambda function configuration, go to the 'Configuration' tab and select 'Environment variables'
+   - Check that the 'DATABASE_URL' variable is correctly set and the database is accessible from within the VPC
+
+5. Analyze the CloudWatch logs:
+   - In the Lambda function's 'Monitor' tab, click on 'View CloudWatch logs'
+   - Look for any specific error messages or stack traces that might provide more details about the 'error sending request'
+
+6. If you don't have permissions to do the following changes, contact your AWS Administrator:
+   - Add a more specific policy to the Lambda execution role to ensure it has the necessary network-related permissions:
+     ```json
+     {
+       "Version": "2012-10-17",
+       "Statement": [
+         {
+           "Effect": "Allow",
+           "Action": [
+             "ec2:CreateNetworkInterface",
+             "ec2:DescribeNetworkInterfaces",
+             "ec2:DeleteNetworkInterface"
+           ],
+           "Resource": "*"
+         }
+       ]
+     }
+     ```
+
+7. Increase the Lambda function timeout:
+   - Go to the Lambda function's 'Configuration' tab and select 'General configuration'
+   - Increase the timeout value to allow more time for the function to complete its execution
+
+8. Test the Lambda function:
+   - Use the 'Test' tab in the Lambda console to create a test event and run the function
+   - Monitor the execution and check for any new error messages or logs
