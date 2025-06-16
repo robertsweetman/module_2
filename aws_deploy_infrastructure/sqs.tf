@@ -92,11 +92,3 @@ resource "aws_iam_role_policy_attachment" "postgres_dataload_sqs_policy_attachme
   role       = aws_iam_role.lambda_role.name
 }
 
-# Output the queue URL for use in your Lambda code
-output "pdf_processing_queue_url" {
-  value = aws_sqs_queue.pdf_processing_queue.url
-}
-
-output "pdf_processing_dlq_url" {
-  value = aws_sqs_queue.pdf_processing_dlq.url
-}

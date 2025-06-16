@@ -18,3 +18,7 @@ output "pdf_processing_queue_url" {
   description = "URL of the PDF processing queue"
   value       = aws_sqs_queue.pdf_processing_queue.url
 }
+
+output "pdf_processing_dlq_url" {
+  value = aws_sqs_queue.pdf_processing_dlq.url
+}
