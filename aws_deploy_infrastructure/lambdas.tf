@@ -11,7 +11,6 @@ resource "aws_lambda_function" "pdf_processing" {
   handler       = "bootstrap"
   runtime       = "provided.al2"
   role          = aws_iam_role.lambda_role.arn
-  reserved_concurrent_executions = 2
   
   s3_bucket     = aws_s3_bucket.lambda_bucket.id
   s3_key        = "pdf_processing.zip"
