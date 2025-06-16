@@ -11,7 +11,7 @@ output "db_name" {
 
 output "lambda_bucket_name" {
   description = "Name of the S3 bucket for Lambda deployment packages"
-  value       = aws_s3_bucket.lambda_bucket.s3_bucket
+  value       = aws_s3_bucket.lambda_bucket.bucket
 }
 
 output "pdf_processing_queue_url" {
