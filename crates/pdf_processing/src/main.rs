@@ -5,9 +5,13 @@ use sqlx::{postgres::PgPoolOptions, Pool, Postgres};
 use std::env;
 use std::fs;
 use std::time::Duration;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 // Import the function from the lib.rs file
 use pdf_processing::{extract_codes, extract_text_from_pdf};
+
+// Track if this container has been used
+static CONTAINER_USED: AtomicBool = AtomicBool::new(false);
 
 #[derive(Debug, Serialize, Deserialize)]
 struct PdfProcessingRequest {
@@ -24,10 +28,17 @@ struct Response {
 }
 
 async fn function_handler(event: LambdaEvent<PdfProcessingRequest>) -> Result<Response, Error> {
+    // Check if this container has been used before
+    if CONTAINER_USED.swap(true, Ordering::SeqCst) {
+        println!("Container reuse detected - this should force a new container next time");
+        // Force the container to restart by exiting the process
+        std::process::exit(1);
+    }
+    
     let resource_id = event.payload.resource_id;
     let pdf_url = event.payload.pdf_url;
     
-    println!("Processing PDF for resource_id: {}", resource_id);
+    println!("Fresh container processing PDF for resource_id: {}", resource_id);
 
     if pdf_url.is_empty() {
         return Ok(Response {
