@@ -1,41 +1,16 @@
 use lambda_runtime::{service_fn, LambdaEvent, Error, run};
-use once_cell::sync::Lazy;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use sqlx::{postgres::PgPoolOptions, Pool, Postgres};
 use std::env;
 use std::fs;
 use std::time::Duration;
-use tracing_subscriber::registry::Registry;
-use std::sync::Once;
 
 // Import the function from the lib.rs file
 use pdf_processing::{extract_codes, extract_text_from_pdf};
 
-// --- Static clients for performance and stability ---
-// Create a single, static HTTP client to be reused across all invocations.
-static HTTP_CLIENT: Lazy<Client> = Lazy::new(Client::new);
-
-// Create a static, lazy-initialized database pool.
-// It will only be created on the first database call and then reused.
-static DB_POOL: Lazy<Pool<Postgres>> = Lazy::new(|| {
-    let db_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
-    PgPoolOptions::new()
-        .max_connections(10) // Increased for robustness
-        .acquire_timeout(Duration::from_secs(5))
-        .connect_lazy(&db_url)
-        .expect("Failed to create lazy database pool")
-});
-
-static INIT_TRACING: Once = Once::new();
-
-fn install_noop_subscriber() {
-    INIT_TRACING.call_once(|| {
-        // a bare registry does nothing but counts as "set"
-        let subscriber = Registry::default();
-        let _ = tracing::subscriber::set_global_default(subscriber);
-    });
-}
+// Remove the static HTTP client entirely
+// Remove the tracing stuff entirely
 
 #[derive(Debug, Serialize, Deserialize)]
 struct PdfProcessingRequest {
@@ -66,9 +41,22 @@ async fn function_handler(event: LambdaEvent<PdfProcessingRequest>) -> Result<Re
         });
     }
 
-    // Download PDF using the static client
+    // Create fresh HTTP client for each invocation
+    let http_client = Client::builder()
+        .timeout(Duration::from_secs(30))
+        .build()?;
+
+    // Create fresh database pool for each invocation
+    let db_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+    let db_pool = PgPoolOptions::new()
+        .max_connections(1) // Lambda only needs 1
+        .acquire_timeout(Duration::from_secs(5))
+        .connect(&db_url)
+        .await?;
+
+    // Download PDF using the fresh client
     println!("Downloading PDF from: {}", pdf_url);
-    let pdf_bytes = match HTTP_CLIENT.get(&pdf_url).send().await {
+    let pdf_bytes = match http_client.get(&pdf_url).send().await {
         Ok(response) => match response.error_for_status() {
             Ok(resp) => resp.bytes().await?,
             Err(e) => {
@@ -104,7 +92,7 @@ async fn function_handler(event: LambdaEvent<PdfProcessingRequest>) -> Result<Re
         }
     };
     
-    // Load codes from file
+    // Load codes from file (this can stay as is)
     let codes_text = fs::read_to_string("codes.txt").unwrap_or_default();
     let codes: Vec<String> = codes_text
         .lines()
@@ -119,9 +107,15 @@ async fn function_handler(event: LambdaEvent<PdfProcessingRequest>) -> Result<Re
     
     println!("Detected {} codes in PDF", codes_count);
     
-    // Store in pdf_content table using the static pool
-    match store_pdf_content_with_codes(&DB_POOL, &resource_id, &pdf_text, &detected_codes).await {
+    // Ensure table exists
+    ensure_table_exists(&db_pool).await?;
+    
+    // Store in pdf_content table
+    match store_pdf_content_with_codes(&db_pool, &resource_id, &pdf_text, &detected_codes).await {
         Ok(_) => {
+            // Explicitly close the pool
+            db_pool.close().await;
+            
             Ok(Response {
                 resource_id,
                 success: true,
@@ -130,6 +124,8 @@ async fn function_handler(event: LambdaEvent<PdfProcessingRequest>) -> Result<Re
             })
         },
         Err(e) => {
+            db_pool.close().await;
+            
             Ok(Response {
                 resource_id,
                 success: false,
@@ -140,6 +136,7 @@ async fn function_handler(event: LambdaEvent<PdfProcessingRequest>) -> Result<Re
     }
 }
 
+// Keep your existing database functions as-is
 async fn ensure_table_exists(pool: &Pool<Postgres>) -> Result<(), Error> {
     sqlx::query(
         r#"
@@ -192,7 +189,6 @@ async fn store_pdf_content_with_codes(
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
-    install_noop_subscriber();       
-    ensure_table_exists(&DB_POOL).await?;
+    // Remove all the tracing stuff
     run(service_fn(function_handler)).await
 }
