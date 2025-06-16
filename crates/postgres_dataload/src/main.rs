@@ -7,7 +7,7 @@ use reqwest::Client;
 use tokio;
 use serde_json;
 use aws_config;
-use aws_sdk_sfn;
+use aws_sdk_sqs::Client as SqsClient;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 struct TenderRecord {
@@ -105,52 +105,55 @@ async fn function_handler(event: LambdaEvent<Request>) -> Result<Response, Error
         }))
         .collect();
 
-    // Add this environment variable check
-    let disable_step_function = std::env::var("DISABLE_STEP_FUNCTION")
-        .unwrap_or_else(|_| "false".to_string()) == "true";
-
-    // Only run Step Function code if not disabled
-    if !pdf_records.is_empty() && !test_mode && !disable_step_function {
-        println!("Found {} records with PDFs, triggering processing workflow", pdf_records.len());
-        
-        // Initialize AWS SDK
-        let config = aws_config::defaults(aws_config::BehaviorVersion::latest()).load().await;
-        let sfn_client = aws_sdk_sfn::Client::new(&config);
-        
-        // Get Step Function ARN from environment variable
-        let step_function_arn = env::var("PDF_PROCESSING_STEP_FUNCTION_ARN")
-            .unwrap_or_else(|_| {
-                println!("Warning: PDF_PROCESSING_STEP_FUNCTION_ARN not set, using placeholder");
-                "arn:aws:states:REGION:ACCOUNT_ID:stateMachine:pdf-processing-workflow".to_string()
-            });
-        
-        // Construct the input payload
-        let payload = serde_json::json!({
-            "records": pdf_records
-        });
-        
-        // Start Step Function execution
-        match sfn_client.start_execution()
-            .state_machine_arn(step_function_arn)
-            .input(payload.to_string())
-            .send()
-            .await {
-                Ok(response) => {
-                    println!("Successfully triggered PDF processing workflow, execution ARN: {}", 
-                             response.execution_arn().to_string());
-                },
-                Err(e) => {
-                    println!("Failed to trigger PDF processing workflow: {}", e);
-                }
-            }
-    }
-    
     // Only save if not in test mode
     if !test_mode {
         if let Some(pool_ref) = &pool {
             println!("Saving records to database...");
             save_records(pool_ref, &records).await?;
             println!("Records saved successfully");
+        }
+    }
+    
+    if !pdf_records.is_empty() && !test_mode {
+        println!("Found {} records with PDFs, queuing for processing", pdf_records.len());
+
+        // Initialize AWS SDK and SQS client
+        let config = aws_config::defaults(aws_config::BehaviorVersion::latest()).load().await;
+        let sqs_client = SqsClient::new(&config);
+
+        // Fetch queue URL from the environment
+        let queue_url = match env::var("PDF_PROCESSING_QUEUE_URL") {
+            Ok(url) => url,
+            Err(_) => {
+                println!("Error: PDF_PROCESSING_QUEUE_URL environment variable not set; skipping SQS send.");
+                String::new()
+            }
+        };
+
+        if !queue_url.is_empty() {
+            for record in pdf_records {
+                // Each record is already a serde_json::Value containing resource_id and pdf_url
+                let message_body = record.to_string();
+
+                match sqs_client
+                    .send_message()
+                    .queue_url(&queue_url)
+                    .message_body(message_body)
+                    .send()
+                    .await
+                {
+                    Ok(resp) => println!(
+                        "Queued record {} (message ID: {})", 
+                        record["resource_id"].as_str().unwrap_or("unknown"),
+                        resp.message_id().unwrap_or_default()
+                    ),
+                    Err(e) => println!(
+                        "Failed to queue record {}: {}", 
+                        record["resource_id"].as_str().unwrap_or("unknown"),
+                        e
+                    ),
+                }
+            }
         }
     }
     

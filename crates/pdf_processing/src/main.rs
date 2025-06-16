@@ -6,6 +6,8 @@ use std::env;
 use std::fs;
 use std::time::Duration;
 use std::sync::atomic::{AtomicBool, Ordering};
+use aws_lambda_events::event::sqs::SqsEvent;
+use serde_json;
 
 // Import the function from the lib.rs file
 use pdf_processing::{extract_codes, extract_text_from_pdf};
@@ -27,7 +29,7 @@ struct Response {
     text_length: Option<usize>,
 }
 
-async fn function_handler(event: LambdaEvent<PdfProcessingRequest>) -> Result<Response, Error> {
+async fn function_handler(event: LambdaEvent<SqsEvent>) -> Result<Response, Error> {
     // Check if this container has been used before
     if CONTAINER_USED.swap(true, Ordering::SeqCst) {
         println!("Container reuse detected - this should force a new container next time");
@@ -35,8 +37,42 @@ async fn function_handler(event: LambdaEvent<PdfProcessingRequest>) -> Result<Re
         std::process::exit(1);
     }
     
-    let resource_id = event.payload.resource_id;
-    let pdf_url = event.payload.pdf_url;
+    // Expect exactly one record per invocation (batch_size = 1)
+    let sqs_records = &event.payload.records;
+    if sqs_records.is_empty() {
+        return Ok(Response {
+            resource_id: String::new(),
+            success: false,
+            message: "No SQS records received".to_string(),
+            text_length: None,
+        });
+    }
+
+    let sqs_message = &sqs_records[0];
+    let body_str = match &sqs_message.body {
+        Some(b) => b,
+        None => {
+            return Ok(Response {
+                resource_id: String::new(),
+                success: false,
+                message: "SQS message body missing".to_string(),
+                text_length: None,
+            });
+        }
+    };
+
+    // Deserialize the message body into our request struct
+    let PdfProcessingRequest { resource_id, pdf_url } = match serde_json::from_str::<PdfProcessingRequest>(body_str) {
+        Ok(req) => req,
+        Err(e) => {
+            return Ok(Response {
+                resource_id: String::new(),
+                success: false,
+                message: format!("Failed to parse SQS message JSON: {}", e),
+                text_length: None,
+            });
+        }
+    };
     
     println!("Fresh container processing PDF for resource_id: {}", resource_id);
 
