@@ -107,7 +107,7 @@ jobs:
           fi
 
       - name: Upload to S3
-        if: ${{ inputs.lambda == 'all' || inputs.lambda == 'postgres_dataload' }}
+        if: ${{ inputs.lambda == 'all' || inputs.lambda == 'postgres_dataload' || inputs.lambda == 'pdf_processing' || inputs.lambda == 'get_data' }}
         run: |
           if [[ "${{ inputs.lambda }}" == "postgres_dataload" || "${{ inputs.lambda }}" == "all" ]]; then
             aws s3 cp postgres_dataload.zip s3://$LAMBDA_BUCKET/postgres_dataload.zip
@@ -120,7 +120,7 @@ jobs:
           fi
 
       - name: Update Lambda Functions
-        if: ${{ inputs.lambda == 'all' || inputs.lambda == 'postgres_dataload' || inputs.lambda == 'pdf_processing' }}
+        if: ${{ inputs.lambda == 'all' || inputs.lambda == 'postgres_dataload' || inputs.lambda == 'pdf_processing' || inputs.lambda == 'get_data' }}
         run: |
           if [[ "${{ inputs.lambda }}" == "postgres_dataload" || "${{ inputs.lambda }}" == "all" ]]; then
             aws lambda update-function-code --function-name postgres_dataload --s3-bucket $LAMBDA_BUCKET --s3-key postgres_dataload.zip
