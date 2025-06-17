@@ -8,6 +8,8 @@ use std::time::Duration;
 use std::sync::atomic::{AtomicBool, Ordering};
 use aws_lambda_events::event::sqs::SqsEvent;
 use serde_json;
+use aws_config;
+use aws_sdk_sqs::Client as SqsClient;
 
 // Import the function from the lib.rs file
 use pdf_processing::{extract_codes, extract_text_from_pdf};
@@ -185,12 +187,37 @@ async fn function_handler(event: LambdaEvent<SqsEvent>) -> Result<Response, Erro
         Ok(_) => {
             println!("Successfully stored PDF content");
             let _ = db_pool.close().await;
-            Ok(Response {
+
+            // Delete the SQS message because we intend to exit non-gracefully afterwards.
+            if let Some(receipt_handle) = &sqs_message.receipt_handle {
+                // build a fresh SQS client using the same config so we don't re-use across threads
+                let sqs_client = SqsClient::new(&aws_config::defaults(aws_config::BehaviorVersion::latest()).load().await);
+                if let Ok(queue_url) = env::var("PDF_PROCESSING_QUEUE_URL") {
+                    let _ = sqs_client
+                        .delete_message()
+                        .queue_url(queue_url)
+                        .receipt_handle(receipt_handle)
+                        .send()
+                        .await;
+                }
+            }
+
+            // Return success to Lambda runtime
+            let response = Response {
                 resource_id,
                 success: true,
                 message: "Successfully processed PDF".to_string(),
                 text_length: Some(pdf_text.len()),
-            })
+            };
+
+            // Force exit AFTER the runtime has returned by spawning a background task
+            // (so the invocation is marked successful, but the container dies immediately after).
+            std::thread::spawn(|| {
+                std::thread::sleep(std::time::Duration::from_millis(10));
+                std::process::exit(0);
+            });
+
+            Ok(response)
         },
         Err(e) => {
             println!("Failed to store PDF content: {}", e);
