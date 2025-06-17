@@ -56,3 +56,28 @@ resource "aws_lambda_function" "postgres_dataload" {
   timeout = 900
   memory_size = 1024
 }
+
+resource "aws_lambda_function" "get_data" {
+  function_name = "get_data"
+  handler       = "bootstrap"
+  runtime       = "provided.al2"
+  role          = aws_iam_role.lambda_role.arn
+  
+  s3_bucket     = aws_s3_bucket.lambda_bucket.id
+  s3_key        = "get_data.zip"
+
+  depends_on = [aws_s3_bucket.lambda_bucket]
+  lifecycle {
+    ignore_changes = [source_code_hash]
+  }
+  
+  environment {
+    variables = {
+      RUST_BACKTRACE  = "1"
+      DATABASE_URL = "postgres://${var.db_admin_name}:${var.db_admin_pwd}@${aws_db_instance.postgres.endpoint}/${var.db_name}"
+    }
+  }
+
+  timeout = 900
+  memory_size = 1024
+}
