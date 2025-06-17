@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       lambda:
-        description: "Lambda to build/deploy (all | postgres_dataload | pdf_processing)"
+        description: "Lambda to build/deploy (all | postgres_dataload | pdf_processing | get_data)"
         required: true
         default: "all"
         type: choice
