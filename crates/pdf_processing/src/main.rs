@@ -5,7 +5,6 @@ use sqlx::{postgres::PgPoolOptions, Pool, Postgres};
 use std::env;
 use std::fs;
 use std::time::Duration;
-use std::sync::atomic::{AtomicBool, Ordering};
 use aws_lambda_events::event::sqs::SqsEvent;
 use serde_json;
 use aws_config;
@@ -15,7 +14,7 @@ use aws_sdk_sqs::Client as SqsClient;
 use pdf_processing::{extract_codes, extract_text_from_pdf};
 
 // Track if this container has been used
-static CONTAINER_USED: AtomicBool = AtomicBool::new(false);
+// Removed: Unused after redesign
 
 #[derive(Debug, Serialize, Deserialize)]
 struct PdfProcessingRequest {
@@ -33,11 +32,7 @@ struct Response {
 
 async fn function_handler(event: LambdaEvent<SqsEvent>) -> Result<Response, Error> {
     // Check if this container has been used before
-    if CONTAINER_USED.swap(true, Ordering::SeqCst) {
-        println!("Container reuse detected - this should force a new container next time");
-        // Force the container to restart by exiting the process
-        std::process::exit(1);
-    }
+    // Removed: Unused after redesign
     
     // Expect exactly one record per invocation (batch_size = 1)
     let sqs_records = &event.payload.records;
@@ -202,22 +197,20 @@ async fn function_handler(event: LambdaEvent<SqsEvent>) -> Result<Response, Erro
                 }
             }
 
-            // Return success to Lambda runtime
-            let response = Response {
+            // Build success response
+            let _response = Response {
                 resource_id,
                 success: true,
                 message: "Successfully processed PDF".to_string(),
                 text_length: Some(pdf_text.len()),
             };
 
-            // Force exit AFTER the runtime has returned by spawning a background task
-            // (so the invocation is marked successful, but the container dies immediately after).
-            std::thread::spawn(|| {
-                std::thread::sleep(std::time::Duration::from_millis(10));
-                std::process::exit(0);
-            });
-
-            Ok(response)
+            // Flush stdout then terminate the process with a success code.
+            use std::io::Write;
+            let _ = std::io::stdout().flush();
+            std::process::exit(0);
+            #[allow(unreachable_code)]
+            Ok(_response)
         },
         Err(e) => {
             println!("Failed to store PDF content: {}", e);
