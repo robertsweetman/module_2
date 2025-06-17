@@ -1,7 +1,7 @@
 # SQS Queue for PDF processing
 resource "aws_sqs_queue" "pdf_processing_queue" {
   name                      = "pdf-processing-queue"
-  visibility_timeout_seconds = 900  # 15 minutes (longer than your Lambda timeout)
+  visibility_timeout_seconds = 300  # 5 minutes (longer than your Lambda timeout)
   message_retention_seconds = 1209600  # 14 days
   receive_wait_time_seconds = 20  # Long polling
   
@@ -31,10 +31,10 @@ resource "aws_lambda_event_source_mapping" "pdf_processing_sqs_trigger" {
   function_name    = aws_lambda_function.pdf_processing.function_name
   
   batch_size       = 1  # Process one PDF at a time
-  maximum_batching_window_in_seconds = 5
+  maximum_batching_window_in_seconds = 0  # Disable extra buffering; one message per invoke
   
   scaling_config {
-    maximum_concurrency = 10  # Control concurrency here instead of reserved concurrency
+    maximum_concurrency = 200  # Control concurrency here instead of reserved concurrency
   }
 }
 

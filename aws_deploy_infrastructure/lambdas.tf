@@ -27,7 +27,7 @@ resource "aws_lambda_function" "pdf_processing" {
     }
   }
 
-  timeout = 900
+  timeout = 120
   memory_size = 1024
 }
 
