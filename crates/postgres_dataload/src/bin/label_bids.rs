@@ -11,16 +11,31 @@ async fn main() -> Result<(), sqlx::Error> {
         .connect(&database_url)
         .await?;
 
-    // Ensure the 'bid' column exists
+    // Ensure the 'bid' column exists as INTEGER (0=no, 1=yes, NULL=unlabeled)
     sqlx::query(
         r#"
         DO $$
         BEGIN
+            /* Case 1: column does not exist -> create as INTEGER */
             IF NOT EXISTS (
-                SELECT 1 FROM information_schema.columns
-                WHERE table_name='tender_records' AND column_name='bid'
+                SELECT 1
+                FROM information_schema.columns
+                WHERE table_name = 'tender_records' AND column_name = 'bid'
             ) THEN
-                ALTER TABLE tender_records ADD COLUMN bid BOOLEAN;
+                ALTER TABLE tender_records ADD COLUMN bid INTEGER;
+
+            /* Case 2: column exists but is BOOLEAN -> convert to INTEGER */
+            ELSIF EXISTS (
+                SELECT 1
+                FROM information_schema.columns
+                WHERE table_name = 'tender_records'
+                  AND column_name = 'bid'
+                  AND data_type = 'boolean'
+            ) THEN
+                -- Convert TRUE/FALSE to 1/0 while changing type
+                ALTER TABLE tender_records
+                ALTER COLUMN bid DROP DEFAULT,
+                ALTER COLUMN bid TYPE INTEGER USING (CASE WHEN bid IS TRUE THEN 1 WHEN bid IS FALSE THEN 0 ELSE NULL END);
             END IF;
         END
         $$;
@@ -66,20 +81,20 @@ async fn main() -> Result<(), sqlx::Error> {
                 sqlx::query(
                     "UPDATE tender_records SET bid = $1 WHERE id = $2"
                 )
-                .bind(true)
+                .bind(1) // 1 = yes, is a bid
                 .bind(id)
                 .execute(&pool)
                 .await?;
-                println!("Updated record {} with bid = true", id);
+                println!("Updated record {} with bid = 1 (yes)", id);
             } else if input == "n" || input == "no" {
                 sqlx::query(
                     "UPDATE tender_records SET bid = $1 WHERE id = $2"
                 )
-                .bind(false)
+                .bind(0) // 0 = no, not a bid
                 .bind(id)
                 .execute(&pool)
                 .await?;
-                println!("Updated record {} with bid = false", id);
+                println!("Updated record {} with bid = 0 (no)", id);
             } else {
                 println!("Please enter 'y', 'n', or 'quit'.");
             }
