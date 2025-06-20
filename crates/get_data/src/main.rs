@@ -2,8 +2,10 @@ use lambda_runtime::{service_fn, LambdaEvent, Error};
 use serde::{Deserialize, Serialize};
 use scraper::{Html, Selector};
 use sqlx::{postgres::PgPoolOptions, Pool, Postgres};
-use std::{env, fs};
+use std::env;
 use reqwest::Client;
+use aws_config;
+use aws_sdk_s3::Client as S3Client;
 
 use pdf_processing::{extract_codes, extract_text_from_pdf};
 
@@ -38,6 +40,49 @@ struct Response {
     message: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     sample_records: Option<Vec<TenderRecord>>,
+}
+
+#[derive(Debug)]
+enum StorageBackend {
+    S3 { client: S3Client, bucket: String },
+}
+
+async fn read_codes_from_storage(
+    storage: &StorageBackend,
+    filename: &str,
+) -> Result<Vec<String>, Error> {
+    let content = match storage {
+        StorageBackend::S3 { client, bucket } => {
+            println!("Reading codes from S3: s3://{}/{}", bucket, filename);
+            let response = client
+                .get_object()
+                .bucket(bucket)
+                .key(filename)
+                .send()
+                .await
+                .map_err(|e| format!("Failed to get object from S3: {}", e))?;
+
+            let data = response
+                .body
+                .collect()
+                .await
+                .map_err(|e| format!("Failed to read S3 response body: {}", e))?;
+
+            String::from_utf8(data.into_bytes().to_vec())
+                .map_err(|e| format!("Failed to convert S3 data to string: {}", e))?
+        }
+    };
+
+    // Parse codes using the same approach as pdf_processing
+    let codes: Vec<String> = content
+        .lines()
+        .filter_map(|line| line.split(',').next())  // Take everything before first comma
+        .map(|code| code.trim().to_string())
+        .filter(|code| !code.is_empty())
+        .collect();
+    
+    println!("Loaded {} codes from {}", codes.len(), filename);
+    Ok(codes)
 }
 
 async fn function_handler(event: LambdaEvent<Request>) -> Result<Response, Error> {
@@ -83,14 +128,27 @@ async fn function_handler(event: LambdaEvent<Request>) -> Result<Response, Error
         println!("Tender records saved");
     }
 
-    // Load detection codes once
-    let codes_text = fs::read_to_string("codes.txt").unwrap_or_default();
-    let codes: Vec<String> = codes_text
-        .lines()
-        .filter_map(|l| l.split(',').next())
-        .map(|c| c.trim().to_string())
-        .filter(|c| !c.is_empty())
-        .collect();
+    // Load detection codes from S3
+    let bucket_name = env::var("LAMBDA_BUCKET_NAME")
+        .map_err(|_| "LAMBDA_BUCKET_NAME environment variable not set")?;
+    
+    // Initialize AWS S3 client
+    let aws_config = aws_config::defaults(aws_config::BehaviorVersion::latest()).load().await;
+    let s3_client = S3Client::new(&aws_config);
+    let storage = StorageBackend::S3 { 
+        client: s3_client, 
+        bucket: bucket_name 
+    };
+    
+    // Read codes from S3
+    let codes = read_codes_from_storage(&storage, "codes.txt").await
+        .map_err(|e| format!("Failed to read codes from S3: {}", e))?;
+    
+    if codes.len() > 0 {
+        println!("First 5 codes: {:?}", &codes[..codes.len().min(5)]);
+    } else {
+        println!("WARNING: No codes loaded from S3!");
+    }
 
     // Process PDFs
     if let Some(pool_ref) = &pool {
@@ -240,7 +298,18 @@ async fn process_pdf(
         err
     })?;
 
+    println!("Extracted {} characters from PDF {}", pdf_text.len(), record.resource_id);
+    
     let detected_codes = extract_codes(&pdf_text, codes);
+    println!("Detected {} codes in PDF {}: {:?}", detected_codes.len(), record.resource_id, detected_codes);
+    
+    // Debug: Show a sample of the PDF text to help with troubleshooting
+    if pdf_text.len() > 200 {
+        println!("PDF text sample: '{}'", &pdf_text[..200]);
+    } else {
+        println!("Full PDF text: '{}'", pdf_text);
+    }
+    
     store_pdf_content_with_codes(pool, &record.resource_id, &pdf_text, &detected_codes).await?;
     Ok(())
 }

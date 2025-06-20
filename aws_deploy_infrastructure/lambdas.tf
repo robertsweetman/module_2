@@ -66,7 +66,10 @@ resource "aws_lambda_function" "get_data" {
   s3_bucket     = aws_s3_bucket.lambda_bucket.id
   s3_key        = "get_data.zip"
 
-  depends_on = [aws_s3_bucket.lambda_bucket]
+  depends_on = [
+    aws_s3_bucket.lambda_bucket,
+    aws_s3_object.codes_file
+  ]
   lifecycle {
     ignore_changes = [source_code_hash]
   }
@@ -75,6 +78,7 @@ resource "aws_lambda_function" "get_data" {
     variables = {
       RUST_BACKTRACE  = "1"
       DATABASE_URL = "postgres://${var.db_admin_name}:${var.db_admin_pwd}@${aws_db_instance.postgres.endpoint}/${var.db_name}"
+      LAMBDA_BUCKET_NAME = aws_s3_bucket.lambda_bucket.id
     }
   }
 

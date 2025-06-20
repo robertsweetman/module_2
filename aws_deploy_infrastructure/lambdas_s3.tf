@@ -52,3 +52,16 @@ resource "aws_s3_bucket_policy" "lambda_bucket_policy" {
 
 # Add AWS caller identity data source
 data "aws_caller_identity" "current" {}
+
+# Upload codes.txt to S3
+resource "aws_s3_object" "codes_file" {
+  bucket = aws_s3_bucket.lambda_bucket.id
+  key    = "codes.txt"
+  source = "${path.module}/../codes.txt"
+  etag   = filemd5("${path.module}/../codes.txt")
+}
+
+# Note: The get_data Lambda function uses the shared lambda_role which already has s3:* permissions
+# No additional IAM configuration needed since the shared role covers all S3 access
+
+

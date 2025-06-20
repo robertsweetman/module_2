@@ -14,4 +14,7 @@ tokio = { version = "1.45.1", features = ["full"] }
 openssl = { version = "0.10.73", features = ["vendored"] }
 native-tls = { version = "0.2", features = ["vendored"] }
 # Local dependency for PDF processing utilities
-pdf_processing = { path = "../pdf_processing" } 
+pdf_processing = { path = "../pdf_processing" }
+# AWS SDK for S3 access
+aws-config = "1.0"
+aws-sdk-s3 = "1.0" 
