@@ -304,8 +304,9 @@ async fn process_pdf(
     println!("Detected {} codes in PDF {}: {:?}", detected_codes.len(), record.resource_id, detected_codes);
     
     // Debug: Show a sample of the PDF text to help with troubleshooting
-    if pdf_text.len() > 200 {
-        println!("PDF text sample: '{}'", &pdf_text[..200]);
+    if pdf_text.chars().count() > 200 {
+        let sample: String = pdf_text.chars().take(200).collect();
+        println!("PDF text sample: '{}'", sample);
     } else {
         println!("Full PDF text: '{}'", pdf_text);
     }
