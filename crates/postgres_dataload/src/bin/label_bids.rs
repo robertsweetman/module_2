@@ -3,6 +3,21 @@ use sqlx::Row;
 use std::env;
 use std::io::{self, Write};
 
+/// Remove any HTML tags (e.g., <tag> .. </tag>) from a string.
+fn strip_html(input: &str) -> String {
+    let mut out = String::with_capacity(input.len());
+    let mut in_tag = false;
+    for c in input.chars() {
+        match c {
+            '<' => in_tag = true,
+            '>' => in_tag = false,
+            _ if !in_tag => out.push(c),
+            _ => {},
+        }
+    }
+    out.trim().to_string()
+}
+
 #[tokio::main]
 async fn main() -> Result<(), sqlx::Error> {
     let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
@@ -45,13 +60,13 @@ async fn main() -> Result<(), sqlx::Error> {
     .await?;
 
     loop {
-        // Fetch a random unlabeled record
+        // Fetch the next unlabeled record in ascending ID order
         let row = sqlx::query(
             r#"
             SELECT id, title, ca, info
             FROM tender_records
             WHERE bid IS NULL
-            ORDER BY random()
+            ORDER BY id
             LIMIT 1
             "#
         )
@@ -64,9 +79,9 @@ async fn main() -> Result<(), sqlx::Error> {
             let ca: String = r.get("ca");
             let info: String = r.get("info");
 
-            println!("\nTitle: {}", title);
-            println!("CA: {}", ca);
-            println!("Info: {}", info);
+            println!("\nTitle: {}", strip_html(&title));
+            println!("CA: {}", strip_html(&ca));
+            println!("Info: {}", strip_html(&info));
 
             print!("Bid? (y/n/quit): ");
             io::stdout().flush().unwrap();

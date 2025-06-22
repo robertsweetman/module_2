@@ -352,7 +352,7 @@ async fn get_table_content(
             } else { String::new() };
 
             out.push(TenderRecord {
-                title: row.select(&title_sel).next().map(|n| n.inner_html().trim().to_string()).unwrap_or_default(),
+                title: row.select(&title_sel).next().map(|n| n.text().collect::<Vec<_>>().join("").trim().to_string()).unwrap_or_default(),
                 resource_id,
                 ca: row.select(&ca_sel).next().map(|n| n.inner_html().trim().to_string()).unwrap_or_default(),
                 info: String::new(),
