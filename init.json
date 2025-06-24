@@ -1,0 +1,9 @@
+{
+  "jsonrpc": "2.0",
+  "id": 0,
+  "method": "initialize",
+  "params": {
+    "clientName": "debug",
+    "clientVersion": "0.0.0"
+  }
+}

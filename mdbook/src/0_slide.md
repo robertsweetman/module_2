@@ -74,7 +74,44 @@ However, with this in mind, it's already been proposed internally within V1 to r
 
 # Tender Data Overview
 
-## Date Manipulation
+At first glance the tender information looks pretty straightforward. Each record consists of the following:-
+
+
+**tender records** table
+| Column name | Type      | Description                                            | 
+|-------------|-----------|--------------------------------------------------------|
+| id          | integer   | row index in the database as records are added         |
+| title       | text      | title/subject of the tender                            |
+| resource_id | text      | unique internal record number for the tender           |                      
+| ca          | text      | name of the contracting authority                      |
+| published   | text      | date tender was published                              |
+| deadline    | text      | deadline date for submission by contractor             |
+| procedure   | text      | what's the process of submitting a bid                 |
+| status      | text      | is the tender still open/closed and so on              |
+| pdf_url     | text      | url for downloading the whole tender                   |
+| awarddate   | text      | when the tender was awarded                            |
+| value       | text      | what is the tender worth?                              |
+
+**pdf content** table
+| Column name | Type      | Description
+|-------------|-----------|--------------------------------------------------------|
+| resource_id | text      | unique internal record number of the tender            |
+| pdf_text    | text      | content of the tender pdf                              |
+| extraction_timestamp | timestamp with timezone | when was the pdf read into the db? |
+| processing status | text | has the pdf been processed properly? |
+| detected codes | text array | what codes have been identified in the tender? |
+| codes_count | integer | how many codes were found? |
+
+All this has been pulled into PostgreSQL database for easy manipulation. New tenders are pulled into the database on a daily basis as they're published, which includes parsing (reading and storing) pdf text as well since this contains some very useful additional context. 
+
+The challenge with the data however is that 'most' if it appears in the original database as text, which is especially problematic when running queries. Since it's being dumped into a database we need to make some changes before we even think about it's "shape"...
+
+1. Retroactively modify the db columns to change use better types for the columns
+2. Change the Rust parsing code to match the types the db is now using
+
+Then we can at least begin to consider which columns might help us answer the question -> "Should we respond to this tender?"
+
+## Date Manipulation/Cleanup
 
 This is the data and this is the problem - which drives model selection
 

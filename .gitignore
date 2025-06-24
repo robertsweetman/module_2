@@ -3,3 +3,5 @@
 */.terraform.lock.hcl
 test*
 test.*
+.env
+mcp-server/node_modules/*
