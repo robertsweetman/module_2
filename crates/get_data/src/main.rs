@@ -6,13 +6,34 @@ use std::env;
 use reqwest::Client;
 use aws_config;
 use aws_sdk_s3::Client as S3Client;
+use chrono::{NaiveDate, NaiveDateTime};
+use bigdecimal::BigDecimal;
+use regex::Regex;
+use std::str::FromStr;
 
 use pdf_processing::{extract_codes, extract_text_from_pdf};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 struct TenderRecord {
     title: String,
-    resource_id: String,
+    resource_id: i64,
+    ca: String,
+    info: String,
+    published: Option<NaiveDateTime>,
+    deadline: Option<NaiveDateTime>,
+    procedure: String,
+    status: String,
+    pdf_url: String,
+    awarddate: Option<NaiveDate>,
+    value: Option<BigDecimal>,
+    cycle: String,
+    bid: Option<i32>, // 1 = bid, 0 = no bid, NULL = unlabeled
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+struct TenderRecordRaw {
+    title: String,
+    resource_id: i64,
     ca: String,
     info: String,
     published: String,
@@ -178,14 +199,15 @@ async fn ensure_tender_table_exists(pool: &Pool<Postgres>) -> Result<(), Error> 
             resource_id TEXT NOT NULL UNIQUE,
             ca TEXT NOT NULL,
             info TEXT NOT NULL,
-            published TEXT NOT NULL,
-            deadline TEXT NOT NULL,
+            published TIMESTAMP WITHOUT TIME ZONE,
+            deadline TIMESTAMP WITHOUT TIME ZONE,
             procedure TEXT NOT NULL,
             status TEXT NOT NULL,
             pdf_url TEXT NOT NULL,
-            awarddate TEXT NOT NULL,
-            value TEXT NOT NULL,
+            awarddate DATE,
+            value DECIMAL(15,2),
             cycle TEXT NOT NULL,
+            bid INTEGER DEFAULT NULL,
             created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
         )
         "#
@@ -199,7 +221,7 @@ async fn ensure_pdf_table_exists(pool: &Pool<Postgres>) -> Result<(), Error> {
     sqlx::query(
         r#"
         CREATE TABLE IF NOT EXISTS pdf_content (
-            resource_id TEXT PRIMARY KEY,
+            resource_id BIGINT PRIMARY KEY,
             pdf_text TEXT NOT NULL,
             extraction_timestamp TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
             processing_status TEXT NOT NULL,
@@ -219,8 +241,8 @@ async fn save_records(pool: &Pool<Postgres>, records: &[TenderRecord]) -> Result
         sqlx::query(
             r#"
             INSERT INTO tender_records 
-            (title, resource_id, ca, info, published, deadline, procedure, status, pdf_url, awarddate, value, cycle)
-            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+            (title, resource_id, ca, info, published, deadline, procedure, status, pdf_url, awarddate, value, cycle, bid)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
             ON CONFLICT (resource_id) DO UPDATE SET
                 title = EXCLUDED.title,
                 ca = EXCLUDED.ca,
@@ -233,10 +255,11 @@ async fn save_records(pool: &Pool<Postgres>, records: &[TenderRecord]) -> Result
                 awarddate = EXCLUDED.awarddate,
                 value = EXCLUDED.value,
                 cycle = EXCLUDED.cycle
+                -- Note: We don't update bid column to preserve existing labels
             "#
         )
         .bind(&rec.title)
-        .bind(&rec.resource_id)
+        .bind(rec.resource_id)
         .bind(&rec.ca)
         .bind(&rec.info)
         .bind(&rec.published)
@@ -247,6 +270,7 @@ async fn save_records(pool: &Pool<Postgres>, records: &[TenderRecord]) -> Result
         .bind(&rec.awarddate)
         .bind(&rec.value)
         .bind(&rec.cycle)
+        .bind(&rec.bid)
         .execute(pool)
         .await?;
     }
@@ -255,7 +279,7 @@ async fn save_records(pool: &Pool<Postgres>, records: &[TenderRecord]) -> Result
 
 async fn store_pdf_content_with_codes(
     pool: &Pool<Postgres>,
-    resource_id: &str,
+    resource_id: i64,
     pdf_text: &str,
     detected_codes: &[String],
 ) -> Result<(), Error> {
@@ -311,7 +335,7 @@ async fn process_pdf(
         println!("Full PDF text: '{}'", pdf_text);
     }
     
-    store_pdf_content_with_codes(pool, &record.resource_id, &pdf_text, &detected_codes).await?;
+    store_pdf_content_with_codes(pool, record.resource_id, &pdf_text, &detected_codes).await?;
     Ok(())
 }
 
@@ -351,9 +375,10 @@ async fn get_table_content(
                 format!("https://www.etenders.gov.ie/epps/cft/downloadNoticeForAdvSearch.do?resourceId={}", resource_id)
             } else { String::new() };
 
-            out.push(TenderRecord {
+            // First collect raw data
+            let raw_record = TenderRecordRaw {
                 title: row.select(&title_sel).next().map(|n| n.text().collect::<Vec<_>>().join("").trim().to_string()).unwrap_or_default(),
-                resource_id,
+                resource_id: resource_id.parse::<i64>().unwrap(),
                 ca: row.select(&ca_sel).next().map(|n| n.inner_html().trim().to_string()).unwrap_or_default(),
                 info: String::new(),
                 published: row.select(&pub_sel).next().map(|n| n.inner_html().trim().to_string()).unwrap_or_default(),
@@ -364,7 +389,10 @@ async fn get_table_content(
                 awarddate: row.select(&award_sel).next().map(|n| n.inner_html().trim().to_string()).unwrap_or_default(),
                 value: row.select(&value_sel).next().map(|n| n.inner_html().trim().to_string()).unwrap_or_default(),
                 cycle: String::new(),
-            });
+            };
+
+            // Convert to proper types
+            out.push(TenderRecord::from(raw_record));
         }
 
         if test_mode && out.len() >= 5 {
@@ -373,6 +401,83 @@ async fn get_table_content(
     }
 
     Ok(out)
+}
+
+// Utility functions for parsing dates and values from Irish tender data
+fn parse_irish_date(date_str: &str) -> Option<NaiveDate> {
+    if date_str.is_empty() {
+        return None;
+    }
+    
+    // Parse HTML scraping date format: "24/06/2025 17:24:53"
+    if let Ok(date) = NaiveDate::parse_from_str(date_str, "%d/%m/%Y %H:%M:%S") {
+        return Some(date);
+    }
+    
+    // Fallback formats (just in case)
+    let fallback_formats = [
+        "%d/%m/%Y",                 // 25/12/2024
+        "%d-%m-%Y",                 // 25-12-2024
+        "%Y-%m-%d",                 // 2024-12-25 (ISO format)
+    ];
+    
+    for format in &fallback_formats {
+        if let Ok(date) = NaiveDate::parse_from_str(date_str, format) {
+            return Some(date);
+        }
+    }
+    
+    println!("Warning: Could not parse date: '{}'", date_str);
+    None
+}
+
+fn parse_irish_datetime(dt_str: &str) -> Option<NaiveDateTime> {
+    if dt_str.is_empty() { return None; }
+    NaiveDateTime::parse_from_str(dt_str, "%d/%m/%Y %H:%M:%S").ok()
+}
+
+fn parse_tender_value(value_str: &str) -> Option<BigDecimal> {
+    if value_str.is_empty() {
+        return None;
+    }
+    
+    // Create regex for parsing monetary values
+    let value_regex = Regex::new(r"[€£$]?[\d,]+\.?\d*").unwrap();
+    
+    if let Some(captures) = value_regex.find(value_str) {
+        let clean_value = captures.as_str()
+            .replace("€", "")
+            .replace("£", "")
+            .replace("$", "")
+            .replace(",", "");
+            
+        if let Ok(decimal_value) = BigDecimal::from_str(&clean_value) {
+            return Some(decimal_value);
+        }
+    }
+    
+    println!("Warning: Could not parse value: '{}'", value_str);
+    None
+}
+
+impl From<TenderRecordRaw> for TenderRecord {
+    fn from(raw: TenderRecordRaw) -> Self {
+        Self {
+            title: raw.title,
+            resource_id: raw.resource_id,
+            ca: raw.ca,
+            info: raw.info,
+            published: parse_irish_datetime(&raw.published),
+            deadline: parse_irish_datetime(&raw.deadline),
+            procedure: raw.procedure,
+            status: raw.status,
+            pdf_url: raw.pdf_url,
+            awarddate: parse_irish_date(&raw.awarddate),
+            value: parse_tender_value(&raw.value),
+            cycle: raw.cycle,
+            bid: None,
+        }
+    }
 }
 
 #[tokio::main]

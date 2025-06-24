@@ -91,16 +91,17 @@ At first glance the tender information looks pretty straightforward. Each record
 | pdf_url     | text      | url for downloading the whole tender                   |
 | awarddate   | text      | when the tender was awarded                            |
 | value       | text      | what is the tender worth?                              |
+| bid         | integer   | ML label: 1=bid, 0=no bid, NULL=unlabelled             |
 
 **pdf content** table
-| Column name | Type      | Description
-|-------------|-----------|--------------------------------------------------------|
-| resource_id | text      | unique internal record number of the tender            |
-| pdf_text    | text      | content of the tender pdf                              |
-| extraction_timestamp | timestamp with timezone | when was the pdf read into the db? |
-| processing status | text | has the pdf been processed properly? |
-| detected codes | text array | what codes have been identified in the tender? |
-| codes_count | integer | how many codes were found? |
+| Column name          | Type                    | Description                                            | 
+|----------------------|-------------------------|--------------------------------------------------------|
+| resource_id          | text                    | unique internal record number of the tender            |
+| pdf_text             | text                    | content of the tender pdf                              |
+| extraction_timestamp | timestamp with timezone | when was the pdf read into the db?                     |
+| processing status    | text                    | has the pdf been processed properly?                   |
+| detected codes       | text array              | what codes have been identified in the tender?         |
+| codes_count          | integer                 | how many codes were found?                             |
 
 All this has been pulled into PostgreSQL database for easy manipulation. New tenders are pulled into the database on a daily basis as they're published, which includes parsing (reading and storing) pdf text as well since this contains some very useful additional context. 
 
