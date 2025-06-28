@@ -6,10 +6,10 @@ Print the rubric sheet
 
 ## TODO:
 
-0. Bring in notes from word doc
-  - Read/make my own notes on the rubric
-  - Bring in MDdoc setup and pipelines from Module 1
-1. Pull data into PostGres DB
+- [ ] Bring in notes from word doc
+- [ ] Read/make my own notes on the rubric
+- [ ] Bring in MDdoc setup and pipelines from Module 1
+- [ ] Pull data into PostGres DB
   - Store in S3?
   - TF s3 bucket and tf state
   - Define schema
@@ -47,10 +47,21 @@ Print the rubric sheet
 
 ### Structure: 
 
-crates/aisummary
-crates/datamanipulation
-crates/modeltraining
-crates/pushresults
+.gihub/workflows
+ - build_lambdas            - build lambda's, upload to S3, notify new lambda version
+ - terraform_plan_and_apply - run plan, apply following plan review
+ - deploy_site              - deploy mdbook to github pages
+ - generate_pdf             - generate a pdf for module submission from mdbook
+aws_backend_bootstrap       - create S3 for tf state backend
+aws_deploy_infrastructure   - deploys lambda's and other resources, uses s3 backend
+crates
+ - get_data                 - main postrgesql data-loading pipeline
+ - postgres_dataload        - uses sqs to hand off pdf_url to pdf_processing
+ - crates/pdf_processing    - processes pdf's from sqs
+mcp-server                  - custom mcp server for interrogating the PostgreSQL RDS Db
+mdbook                      - publish to github pages & also pdf export
+python                      - jupyter notebook for data interrogation and cleaning
+
 
 These 4 all need creating
 
@@ -66,20 +77,31 @@ source .venv/bin/activate
 pip install -r python/requirements.txt
 ```
 
-2. Supply database credentials.  Copy `env.example` to `.env` (ignored by git) and fill in the values that match your Amazon RDS instance:
+2. Set AWS credentials and (optionally) the Secrets Manager reference in your shell.  At minimum you need:
 
 ```bash
-cp env.example .env  # Optional for local dev; in CI set DATABASE_URL via secrets
-# edit .env and set DB_HOST, DB_USER, ...
+export AWS_REGION=...         # or your preferred region
+export AWS_ACCESS_KEY_ID=AKIA...
+export AWS_SECRET_ACCESS_KEY=...
+export AWS_SECRETS_NAME=...
 ```
 
-3. Run a quick smoke test:
+These variables are the first place boto3 looks for credentials [docs](https://boto3.amazonaws.com/v1/documentation/api/latest/guide/credentials.html#configuring-credentials).
+
+3. Run a quick smoke test **from the project root**:
 
 ```bash
 python -m python.db_utils
 ```
 
-This should print the number of rows in `tender_records` and a breakdown per **bid** label.
+If you happen to be inside the `python/` directory, drop the package prefix:
+
+```bash
+cd python
+python -m db_utils
+```
+
+Either command should print the number of rows in `tender_records` and a breakdown per **bid** label.
 
 4. Launch Jupyter for interactive work:
 
@@ -87,10 +109,10 @@ This should print the number of rows in `tender_records` and a breakdown per **b
 jupyter lab
 ```
 
-From a notebook you can now do:
+Then, in a notebook:
 
 ```python
-from python.db_utils import load_tender_records
+from python.db_utils import load_tender_records  # or from db_utils if your CWD is python/
 
 df = load_tender_records(include_unlabelled=False)
 ```
@@ -99,21 +121,6 @@ and proceed with feature engineering, train/test split, etc.
 
 ### Using AWS Secrets Manager
 
-If you provisioned the `etenders_rds_credentials` secret via Terraform, you can let the Python utilities fetch it automatically:
-
-1. Ensure your local AWS credentials allow `secretsmanager:GetSecretValue` for that secret.
-2. Export either the secret *name* or its ARN:
-
-```bash
-export AWS_SECRETS_NAME=etenders_rds_credentials   # or export AWS_SECRETS_ARN=arn:...
-```
-
-3. Run the smoke test again:
-
-```bash
-python -m python.db_utils
-```
-
-The helper will pull the JSON payload, construct a connection string, and connect—no `.env` file needed.
+If you provisioned the `etenders_rds_credentials` secret via Terraform (see `aws_deploy_infrastructure/`), the helper will automatically pull it when `AWS_SECRETS_NAME` **or** `AWS_SECRETS_ARN` is set, so no plain-text connection strings are required.
 
 

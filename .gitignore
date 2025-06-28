@@ -1,8 +1,18 @@
-/target
+# terraform
+
 */.terraform
 */.terraform.lock.hcl
+
+# rust
 test*
 test.*
 .env
-python/.venv/*
+/target
+
+# mcp-server
 mcp-server/node_modules/*
+
+# python
+python/.ipynb_checkpoints/*
+python/.venv/*
+python/__pycache__/*
