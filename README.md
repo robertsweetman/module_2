@@ -2,48 +2,51 @@
 
 ## Notes:
 
-Print the rubric sheet
+This is the 'working code' version of Adv Sw Engineering module 2 about designing an ML model and training it. See the page https://robertsweetman.github.io/module_2/ for the current state of the submission document.
 
 ## TODO:
 
 - [ ] Bring in notes from word doc
 - [ ] Read/make my own notes on the rubric
-- [ ] Bring in MDdoc setup and pipelines from Module 1
-- [ ] Pull data into PostGres DB
-  - Store in S3?
-  - TF s3 bucket and tf state
-  - Define schema
-  - Document connection and user settings
-  - Use github secrets
-2. Add column for 'test data' category
-  - Bid Y/N
-  - Do this manually
-3. Look at serverless rust options maybe?#
-  - https://github.com/featurestoreorg/serverless-ml-course 
-4. Print rubric
-5. Write up rubric notes in submission document
-6. Rust model training
-  - any data cleaning required?
-  - nulls? Null PDF's?
-  - what other data validation is needed?
-    - document all the data validation steps
-  - look at different comparisons
-  - write up why some were rejected
-  - use Polars.rs pipeline
-7. Add AI summary part
-  - Bid confidence, based on training
-  - AI summary
-    - Costs
-    - Timelines
-    - Key contacts
-    - Text Summary
-    - Absolute requirements
-    - Supplier codes
-8. Write up process
-9. Fix the 'send summary to endpoint' part
-  - Alternatively publish it there, pub/sub vs. @Version1 address (shrug)
-  - What other options
-10. Reference back to the rubric for marking
+- [x] Bring in MDdoc setup and pipelines from Module 1
+- [x] Pull data into PostGres DB
+- [x] Store in S3? <- used RDS instead
+- [x] TF s3 bucket and tf state
+- [x] Define schema
+- [x] Document connection and user settings
+- [x] Use github secrets <- transitioned to AWS Secret store, for clarity
+- [x] Add BID column for 'test data' category <- required for all data
+- [x] Bid Y/N <- added manuall 
+- [ ] Look at serverless rust options maybe? - https://github.com/featurestoreorg/serverless-ml-course 
+- [x] Print rubric
+- [ ] Write submission document with respect to the rubric notes
+- [ ] Rust model training <- used Python pandas instead, lack of time available to use Rust unfortunately
+- [ ] any data cleaning required? <- Yes, see etenders.ipynb
+- [ ] nulls? Null PDF's?
+- [ ] what other data validation is needed?
+- [ ] document all the data validation steps
+- [ ] look at different comparisons
+- [ ] write up why some were rejected
+- [x] use Polars.rs pipeline <- used Pandas instead, see note ref Python above.
+- [ ] Add AI summary part
+- [ ] Bid confidence, based on training
+- [ ] Reference back to the rubric for marking
+
+## Using LLM's to summarise the tender
+- [ ] AI summary code
+ - [ ] Project Costs, deployment and running 
+ - [ ] Project Timelines
+ - [ ] Key contacts
+ - [ ] Text Summary
+ - [ ] Absolute requirements
+ - [ ] Supplier codes
+- [ ] Write up process documentation
+
+## Features needed
+- [ ] Fix the 'send summary to endpoint' part
+  - [ ] Alternatively publish it there, pub/sub vs. @Version1 address (shrug)
+  - [ ] Investigate other options
+
 
 ### Structure: 
 
