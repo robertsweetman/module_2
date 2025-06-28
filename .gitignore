@@ -4,4 +4,5 @@
 test*
 test.*
 .env
+python/.venv/*
 mcp-server/node_modules/*

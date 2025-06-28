@@ -54,4 +54,66 @@ crates/pushresults
 
 These 4 all need creating
 
+## Python analysis environment
+
+A lightweight Python layer lives under `python/` for ad-hoc data exploration and model training.
+
+1. Install dependencies (ideally in a virtualenv):
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -r python/requirements.txt
+```
+
+2. Supply database credentials.  Copy `env.example` to `.env` (ignored by git) and fill in the values that match your Amazon RDS instance:
+
+```bash
+cp env.example .env  # Optional for local dev; in CI set DATABASE_URL via secrets
+# edit .env and set DB_HOST, DB_USER, ...
+```
+
+3. Run a quick smoke test:
+
+```bash
+python -m python.db_utils
+```
+
+This should print the number of rows in `tender_records` and a breakdown per **bid** label.
+
+4. Launch Jupyter for interactive work:
+
+```bash
+jupyter lab
+```
+
+From a notebook you can now do:
+
+```python
+from python.db_utils import load_tender_records
+
+df = load_tender_records(include_unlabelled=False)
+```
+
+and proceed with feature engineering, train/test split, etc.
+
+### Using AWS Secrets Manager
+
+If you provisioned the `etenders_rds_credentials` secret via Terraform, you can let the Python utilities fetch it automatically:
+
+1. Ensure your local AWS credentials allow `secretsmanager:GetSecretValue` for that secret.
+2. Export either the secret *name* or its ARN:
+
+```bash
+export AWS_SECRETS_NAME=etenders_rds_credentials   # or export AWS_SECRETS_ARN=arn:...
+```
+
+3. Run the smoke test again:
+
+```bash
+python -m python.db_utils
+```
+
+The helper will pull the JSON payload, construct a connection string, and connect—no `.env` file needed.
+
 

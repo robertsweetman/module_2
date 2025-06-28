@@ -1,0 +1,9 @@
+pandas==2.3.0
+sqlalchemy==2.0.41
+psycopg2-binary==2.9.10
+scikit-learn==1.7.0
+jupyterlab==4.4.4
+ipywidgets==8.1.7
+sentence-transformers==4.1.0
+python-dotenv==1.1.1
+boto3==1.38.46 

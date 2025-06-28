@@ -21,3 +21,23 @@ variable "db_admin_pwd" {
     sensitive = true
     # no default - provided by github actions
 }
+
+variable "db_credentials_secret_name" {
+  description = "Name of the Secrets Manager secret that will hold the PostgreSQL credentials"
+  type        = string
+  default     = "etenders_rds_credentials"
+}
+
+variable "db_credentials_initial_secret_string" {
+  description = "Initial JSON payload for the DB credentials secret. Override via TF_VAR_... or terraform.tfvars."
+  type        = string
+  default     = <<EOF
+{
+  "host": "your-rds-endpoint.amazonaws.com",
+  "port": 5432,
+  "username": "username",
+  "password": "password",
+  "database": "etenders"
+}
+EOF
+}

@@ -78,20 +78,20 @@ At first glance the tender information looks pretty straightforward. Each record
 
 
 **tender records** table
-| Column name | Type      | Description                                            | 
-|-------------|-----------|--------------------------------------------------------|
-| id          | integer   | row index in the database as records are added         |
-| title       | text      | title/subject of the tender                            |
-| resource_id | text      | unique internal record number for the tender           |                      
-| ca          | text      | name of the contracting authority                      |
-| published   | text      | date tender was published                              |
-| deadline    | text      | deadline date for submission by contractor             |
-| procedure   | text      | what's the process of submitting a bid                 |
-| status      | text      | is the tender still open/closed and so on              |
-| pdf_url     | text      | url for downloading the whole tender                   |
-| awarddate   | text      | when the tender was awarded                            |
-| value       | text      | what is the tender worth?                              |
-| bid         | integer   | ML label: 1=bid, 0=no bid, NULL=unlabelled             |
+| Column name | Initial Type      | Description                                            | Modified Type              | 
+|-------------|-------------------|--------------------------------------------------------|----------------------------|
+| id          | integer           | row index in the database as records are added         | -                          |
+| title       | text              | title/subject of the tender                            | text                       |
+| resource_id | text              | unique internal record number for the tender           | integer                    |                     
+| ca          | text              | name of the contracting authority                      | text                       |
+| published   | text              | date tender was published                              | timestamp without timezone |
+| deadline    | text              | deadline date for submission by contractor             | timestamp without timezone |
+| procedure   | text              | what's the process of submitting a bid                 | text                       |
+| status      | text              | is the tender still open/closed and so on              | text                       |
+| pdf_url     | text              | url for downloading the whole tender                   | text                       |
+| awarddate   | text              | when the tender was awarded                            | date                       |
+| value       | text              | what is the tender worth?                              | numeric                    |
+| bid         | integer           | ML label: 1=bid, 0=no bid, NULL=unlabelled             | integer                    |
 
 **pdf content** table
 | Column name          | Type                    | Description                                            | 
@@ -112,9 +112,49 @@ The challenge with the data however is that 'most' if it appears in the original
 
 Then we can at least begin to consider which columns might help us answer the question -> "Should we respond to this tender?"
 
-## Date Manipulation/Cleanup
+## Manually adding the 'bid' column
 
-This is the data and this is the problem - which drives model selection
+In order to be able to train a model on this data we've had to manually label 2000+ records with bid (1) or no bid (0), taking a supervised learning approach.
+
+Since we're going to primarily rely on the title data for this we created a helper script to display that and have the user select y/n to update the table with the appropriate value. 
+Labelling 200o+ records took around 2 hours.
+
+## Data Manipulation/Cleanup - tender_records
+
+Dates are not relevant for this ML model, we simply want to decide whether we should submit a bid or not. This means we can remove the `published`, `deadline` and `awarddate` columns entirely.
+
+### id
+This can be removed since resource_id is unique, we don't need another id. 
+
+### resource_id
+This is just a record signifier. We don't actually need to pay attention to it at all when training our model.
+
+### title
+This is the key field we're looking at training the model on to predict whether we should bid (bid column = 1) or not (bid column = 0)
+
+One thing in our favour is that EVERY record has a title field so we don't have to deal with null data in this case.
+
+### ca
+This mighe be relevant if we can figure out what the classifications are and change this into a numeric value
+
+### procedure
+This might be relevant if we can figure out what the classifications are and change this into a numeric value
+
+### status
+Not relevant for training so can be removed from the training data
+
+### pdf_url
+Not relevant for training so can be removed from the training data
+
+## Data Manipulation/Cleanup - pdf_content
+
+This second table is interesting because were a tender has a pdf_url link we can extract the PDF text and get a lot more context.
+
+However, only 75% of tender_records have a PDF attached to them. This makes it problematic because from further investigation of approximately 140 'bid' records, 10% of these don't have a PDF attachment at all.
+
+Sadly this means we can't rely on this content as a 'primary' source of training, especially when there are records that would be missed that have a multi-million pound bid value. 
+
+We can though use this content in the 'non-ML' component of the solution though, where the pdf content exists.
 
 Exploratory data analysis graphics
 
@@ -122,10 +162,15 @@ Evaluation metrics
 
 ## Model Selection
 
-Which paradigms were considered
-Supervised Learning - labelled data, use a training subset, why would this work?
-Semi-Supervised learning - what this means and why not
-Unsupervised and Reinforcement - what this means and why not
+Supervised learning seems most appropriate as we're because by labelling the data we can teach the model what is important and have it apply that to recognising the difference between tenders to bid on and not to bid on. 
+
+Since we're asking a simple question ("Is this tender suitable to make a bid on or not?") that isn't something we can assume will work with un-supervised learning because there's no inherent pattern to learn/discover. We're primarily going to rely on one feature (title in tender_records) which isn't sufficient for this approach to work. 
+
+Similarly, semi-supervised learning isn't appropriate yet because we only have labelled records. In six, twelve or twenty-four months it might be well worth taking the baseline supervised model and re-running the training. See the section ()[Feedback and Improvements] later in this proposal.
+
+
+
+
 
 How do we conclude why Supervised is better/most suitable.
 
@@ -134,8 +179,6 @@ Use a decision tree 'cause this is most valid
 # Workflow
 
 # Testing and Debugging
-
-# Model Selection
 
 # Deployment
 
