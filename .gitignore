@@ -13,6 +13,6 @@ test.*
 mcp-server/node_modules/*
 
 # python
-python/.ipynb_checkpoints/*
+python/.ipynb_checkpoints
 python/.venv/*
-python/__pycache__/*
+python/__pycache__
