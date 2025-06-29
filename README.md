@@ -65,9 +65,6 @@ mcp-server                  - custom mcp server for interrogating the PostgreSQL
 mdbook                      - publish to github pages & also pdf export
 python                      - jupyter notebook for data interrogation and cleaning
 
-
-These 4 all need creating
-
 ## Python analysis environment
 
 A lightweight Python layer lives under `python/` for ad-hoc data exploration and model training.
