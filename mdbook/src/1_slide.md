@@ -13,10 +13,7 @@ Primarily, can users rely on what they're being told? How can we assemble a body
 
 Additionally, who is ultimately responsible for AI/ML's output and subsequent impact on the business? 
 
-There are so many expamples already of IT in general being used as a smokescreen for dodging accountability, the Post Office scandal being the most egregious recent example. Adding AI into this mix increases complexity as well as the temptation to simply offload governance entirely to a "black box". Consumers are already abdicating responsibility for major life decisions, sometimes very much to their own detriment. Businesses may end up being no different if ethics aren't adhered to.
-
-// TODO: add reference - Post Office scandal
-// TODO: add reference - AI and Social media abuse
+There are so many expamples already of IT in general being used as a smokescreen for dodging accountability, the Post Office scandal REF: being the most egregious recent example. Adding AI into this mix increases complexity as well as the temptation to simply offload governance entirely to a "black box". Consumers are already abdicating responsibility for major life decisions, REF: sometimes very much to their own detriment. Businesses may end up being no different if ethics aren't adhered to.
 
 ## Scope and Objectives
 The report outlines the various approaches to this problem from an ML/AI point of view, including possible training methods and models,
