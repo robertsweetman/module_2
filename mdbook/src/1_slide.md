@@ -78,20 +78,20 @@ At first glance the tender information looks pretty straightforward. Each record
 
 
 **tender records** table
-| Column name | Initial Type      | Description                                            | Modified Type              | 
-|-------------|-------------------|--------------------------------------------------------|----------------------------|
-| id          | integer           | row index in the database as records are added         | -                          |
-| title       | text              | title/subject of the tender                            | text                       |
-| resource_id | text              | unique internal record number for the tender           | integer                    |                     
-| ca          | text              | name of the contracting authority                      | text                       |
-| published   | text              | date tender was published                              | timestamp without timezone |
-| deadline    | text              | deadline date for submission by contractor             | timestamp without timezone |
-| procedure   | text              | what's the process of submitting a bid                 | text                       |
-| status      | text              | is the tender still open/closed and so on              | text                       |
-| pdf_url     | text              | url for downloading the whole tender                   | text                       |
-| awarddate   | text              | when the tender was awarded                            | date                       |
-| value       | text              | what is the tender worth?                              | numeric                    |
-| bid         | integer           | ML label: 1=bid, 0=no bid, NULL=unlabelled             | integer                    |
+| Column name | Initial Type | Description                                    | Modified Type          | 
+|-------------|--------------|------------------------------------------------|------------------------|
+| id          | integer      | row index in the database as records are added | -                      |
+| title       | text         | title/subject of the tender                    | text                   |
+| resource_id | text         | unique internal record number for the tender   | integer                |            
+| ca          | text         | name of the contracting authority              | text                   |
+| published   | text         | date tender was published                      | timestamp w/o timezone |
+| deadline    | text         | deadline date for submission by contractor     | timestamp w/o timezone |
+| procedure   | text         | what's the process of submitting a bid         | text                   |
+| status      | text         | is the tender still open/closed and so on      | text                   |
+| pdf_url     | text         | url for downloading the whole tender           | text                   |
+| awarddate   | text         | when the tender was awarded                    | date                   |
+| value       | text         | what is the tender worth?                      | numeric                |
+| bid         | integer      | ML label: 1=bid, 0=no bid, NULL=unlabelled     | integer                |
 
 **pdf content** table
 | Column name          | Type                    | Description                                            | 
