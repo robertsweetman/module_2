@@ -29,33 +29,38 @@ We can also hand AI the job of creating a quickly scannable summary of tenders t
 
 // TODO: follow on paragraph somewhere about what the Irish Govt have said to Paul about making the tender data more accessible/easier to parse and so on. Possibly use MCP for this!!
 
-# Theoretical Approach
+# Machine Learning and AI principals
 
 ## ML and AI in this use-case
-Firstly we need to spend a bit of time differentiating between ML and AI since recently they've been blended very much into one big bucket. At least ML has been somewhat subsumed by AI in the general public's consciousness.
+Firstly we need to spend a bit of time differentiating between ML and AI since recently they've been blended very much into one big bucket. At the very least ML has been run over by AI in the public consciousness.
 
-Machine learning preceeded AI by using past data, algorithms and pattern identification to predict some sort of future state based on data it's not seen before. Usually within a specific realm or subject.
+Machine learning preceeded AI by using past data, algorithms and pattern identification to predict some sort of future state based on data it's not seen before. Usually within a specific realm or narrow topic.
 
-AI as offered by ChatGPT, Anthropic Claude etc. relies on exposure to huge amounts of data with the goal of developing a more general response to a much wider range of questions across different topics. 
+AI as offered by ChatGPT, Anthropic Claude etc. relies on exposure to huge amounts of data with the goal of developing a more general response to a much wider range of questions across different subjects. 
 
-While we can look at a vast array of ML approaches since we're looking to make a decision ("bid on this or not?") it seems immediately obvious to start our investigation using a decision tree. 
+While we can look at a vast array of ML approaches since we're looking to make a decision ("bid on this or not?") it seems immediately obvious to start our investigation using a decision tree. However, there's a fundamental issue with that assumption because our main piece of data on which to answer this bid/no-bid question is the tender title, which is all text. 
 
-After that we'll have gotten a subset of tenders that we're interested in. At this point we're no longer looking to have the machine 'learn' anything about the tenders, we just want a human actionable summary. This is where AI comes in. 
+We can use ML to answer the specific question about whether to bid and then have AI provide an actionable summary of the text, something it's much more equipped to do. 
 
 * ML component - ask a question of a specific data set
   * Gather the data
   * Make the data palatable - pre-processing
   * Create a custom ML algorithm based on past data - model training
-  * Supply a set of tender records that the new, trained, model deems should be responded to
+  * Tune with any hyper-parameters
+    * Driven by business requirements
+  * Supply a set of tender records that the ML model deems should be responded to
 * AI component - summarise this text
+  * Send the information to an AI endpoint and have it return a summary based on a prompt
 
 The key differentiation here is we're using ML to answer a specific question about a fairly simple data-set. With AI we're asking it to perform a general task for us in quite a hands-off way.
 
-Arguable, given recent advancements, you could just remove the ML stage and throw everything at AI but this would prove more costly. Using ML to reduce the pool of tenders (using straightforward open-source tools) gives you better control over spending and allows you to tweak what's deemed acceptable to move to the AI summary step. 
+Arguable, given recent advancements, you could just remove the ML stage and throw everything at AI but this would prove more costly. Using ML to reduce the pool of tenders (using straightforward open-source tools) gives you better control over spending and allows you to tweak what's deemed acceptable to hand over to the AI summary step. 
 
 ## Integration into existing digital solution lifecycle
 
-One of the key aspects of software development that especially applies to ML is quick iterations to see what may or may not give a useful result. Thankfully existing libraries allow fast iteration and just trying things out to see which approach might fit best. 
+One of the key aspects of software development that especially applies to ML is quick iterations to see what may or may not give a useful result. 
+
+Thankfully existing libraries allow fast iteration and just trying things out to see which approach might fit best. 
 
 No-one wants to spend 6 months working on something that ultimately won't supply a result. 
 
@@ -69,7 +74,11 @@ That said, for this to be more than a proof of concept/demo it would be appropri
 
 However, with this in mind, it's already been proposed internally within V1 to respond to the OGP's question about how AI/ML might help them manage the tender process, increase transparency and modernise how they publish tenders by sharing this project/proof of concept with them.
 
+Outside of this context training ML models should pay attention to local laws & statutes (i.e. GDPR), ensure the data is used in an ethical way and aim for transparency when it comes to any decisions that are under-pinned by any sort of AI or ML training process.
+
 # Tender Data Overview
+
+As stated in the Overview section we're looking to reduce the need for sales team members to scrutinize every tender opportunity published by Irish Government. Ideally an ML model processes each tender record and decides whether it's worth further scrutiny. 
 
 At first glance the tender information looks pretty straightforward. Each record consists of the following:-
 
@@ -113,18 +122,17 @@ Then we can at least begin to consider which columns might help us answer the qu
 
 In order to be able to train a model on this data we've had to manually label 2000+ records with bid (1) or no bid (0), taking a supervised learning approach.
 
-Since we're going to primarily rely on the title data for this we created a helper script to display that and have the user select y/n to update the table with the appropriate value. 
-Labelling 200o+ records took around 2 hours.
+Since we're going to primarily rely on the title data for this we created a helper script to display that and have the user select y/n to update the table with the appropriate value. Labelling 200o+ records took around 2 hours.
 
 ## Data Manipulation/Cleanup - tender_records
 
 Dates are not relevant for this ML model, we simply want to decide whether we should submit a bid or not. This means we can remove the `published`, `deadline` and `awarddate` columns entirely.
 
 ### id
-This can be removed since resource_id is unique, we don't need another id. 
+This can be removed since `resource_id` is unique, we don't need another id. 
 
 ### resource_id
-This is just a record signifier. We don't actually need to pay attention to it at all when training our model.
+This is just a record signifier. We don't actually need to pay attention to it at all when training our model so we can drop this also.
 
 ### title
 This is the key field we're looking at training the model on to predict whether we should bid (bid column = 1) or not (bid column = 0)
@@ -132,26 +140,30 @@ This is the key field we're looking at training the model on to predict whether 
 One thing in our favour is that EVERY record has a title field so we don't have to deal with null data in this case.
 
 ### ca
-This mighe be relevant if we can figure out what the classifications are and change this into a numeric value
+This mighe be relevant if we can figure out how to encode this for training.
 
 ### procedure
-This might be relevant if we can figure out what the classifications are and change this into a numeric value
+This might be relevant if we can figure out how to encode this for training to make it useful.
 
 ### status
-Not relevant for training so can be removed from the training data
+Not relevant for training so can be removed from the training data. 
 
 ### pdf_url
-Not relevant for training so can be removed from the training data
+Not relevant for training so can be removed from the training data. We could _maybe_ turn this into a data point but as it is 25% of tenders don't have a PDF attached to them. It was added initially out of curiosity but ended up being removed as it had no impact.
 
-## Data Manipulation/Cleanup - pdf_content
+### pdf_content
 
 This second table is interesting because were a tender has a pdf_url link we can extract the PDF text and get a lot more context.
 
 However, only 75% of tender_records have a PDF attached to them. This makes it problematic because from further investigation of approximately 140 'bid' records, 10% of these don't have a PDF attachment at all.
 
-Sadly this means we can't rely on this content as a 'primary' source of training, especially when there are records that would be missed that have a multi-million pound bid value. 
+### value
+
+Again nearly 50% of records don't have a value and making any assumptions about these (filling in values, adding a mean) would likely only introduce innacuracies. Conversely there might be multi-million pound values hidded in the PDF content. So with this in mind we can't rely on value as a feature of the tender data for ML training. 
 
 We can though use this content in the 'non-ML' component of the solution though, where the pdf content exists.
+
+
 
 Exploratory data analysis graphics
 
