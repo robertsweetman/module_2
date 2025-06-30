@@ -163,12 +163,6 @@ Again nearly 50% of records don't have a value and making any assumptions about 
 
 We can though use this content in the 'non-ML' component of the solution though, where the pdf content exists.
 
-
-
-Exploratory data analysis graphics
-
-Evaluation metrics
-
 ## Model Selection
 
 Supervised learning seems most appropriate as we're because by labelling the data we can teach the model what is important and have it apply that to recognising the difference between tenders to bid on and not to bid on. 
@@ -181,9 +175,11 @@ Similarly, semi-supervised learning isn't appropriate yet because we only have l
 
 
 
-How do we conclude why Supervised is better/most suitable.
+Q: How do we conclude why Supervised is better/most suitable.
 
-Use a decision tree 'cause this is most valid
+# Exploratory data analysis graphics
+
+# Evaluation metrics
 
 # Workflow
 
@@ -192,6 +188,8 @@ Use a decision tree 'cause this is most valid
 # Deployment
 
 # Risk and Mitigation for AI - put this at the end?
+
+# Recommendations and Conclusions (Rubrik)
 
 # Business Impacts
 
