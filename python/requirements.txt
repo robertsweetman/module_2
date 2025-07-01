@@ -9,3 +9,4 @@ python-dotenv==1.1.1
 boto3==1.38.46
 matplotlib==3.10.0
 seaborn==0.13.2
+numpy==2.3.0

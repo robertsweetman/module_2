@@ -8,8 +8,10 @@ from sqlalchemy.engine import Engine  # type: ignore
 
 # Try to load a local .env for developer convenience if python-dotenv is installed.
 try:
-    from dotenv import load_dotenv  # type: ignore
-    load_dotenv()
+    from dotenv import load_dotenv, find_dotenv  # type: ignore
+    # Use *find_dotenv* so running scripts from sub-directories still locate the
+    # project-level .env file.
+    load_dotenv(find_dotenv(), override=False)
 except ModuleNotFoundError:
     # No local .env file or dependency; silently continue.
     pass

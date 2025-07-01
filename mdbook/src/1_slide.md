@@ -186,28 +186,49 @@ Q: How do we conclude why Supervised is better/most suitable.
 ```mermaid
 graph TD;
   subgraph Data_Ingestion
-    A[eTenders site update] -->|Rust crate `get_data`| B[(PostgreSQL RDS)]
-    B --> C[Model Processing Lambda]
-    C --> B
+    A[eTenders site update] -->|Rust crate get_data| B[(PostgreSQL RDS)]
+    B -->|publish new tender| I[SNS / SQS]
   end
 
   subgraph Modelling
-    B --> D[Jupyter notebook / scikit-learn]
+    B --> D[Jupyter / scikit-learn]
     D --> E[Trained model + threshold]
   end
 
-  subgraph Deployment
+  subgraph ML_Ops
+    E --> H[S3: model artifact]
+  end
+
+  subgraph Inference
+    I --> L[Inference Lambda]
+    H --> L
+    L -->|write recommendation| B
+    L -->|bid recommendation=yes| J[Bid SNS]
+  end
+
+  subgraph Notifications
+    J --> M[Notify Sales Lambda]
+    M --> N[SES Email]
+  end
+
+  subgraph Reporting
     E --> F[GitHub Actions]
     F --> G[mdBook report & GitHub Pages]
   end
 
-  style A fill:#fff9c4
-  style B fill:#c8e6c9
-  style D fill:#bbdefb
-  style E fill:#d1c4e9
-  style F fill:#ffe0b2
-  style G fill:#f0f4c3
-
+  %% Styling
+  style A fill:#fff9c4,color:#000
+  style B fill:#c8e6c9,color:#000
+  style D fill:#bbdefb,color:#000
+  style E fill:#d1c4e9,color:#000
+  style H fill:#d7ccc8,color:#000
+  style I fill:#ffe082,color:#000
+  style L fill:#90caf9,color:#000
+  style F fill:#ffe0b2,color:#000
+  style G fill:#f0f4c3,color:#000
+  style J fill:#ffe082,color:#000
+  style M fill:#a5d6a7,color:#000
+  style N fill:#c5cae9,color:#000
 ```
 
 # Testing and Debugging
@@ -218,9 +239,20 @@ From the original (labelled) data of approx 2000 records we've carried out an 80
 
 We're employing a number of 'best in class' technologies to get the results we need. 
 
+Deploy all the resources to AWS using Infrastructure as Code (IaC) via Terraform. This means the entire setup can be torn down, moved and rebuilt at will, rather than manually.
+
+Data is stored in AWS Relational Database Service (RDS) in PostgreSQL
+ * Retains ultimate flexibility of access/changes
+ * Can be easily pulled in to any service or manipulated as needed
+
 AWS serverless Lambda functions
  * The cheapest compute available on the cloud REF: ?
- * Written in Rust, the fastest language for Lambda runtimes REF: 
+ * Written in Rust, the fastest language for Lambda runtimes REF:
+
+Local development/exploration with Jupyter & Python
+ * Probably the largest selection of ML models available
+ * Can easily pull from the PostgreSQL db to create a data-frame
+
 
 
 
