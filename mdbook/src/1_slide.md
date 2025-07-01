@@ -167,9 +167,9 @@ We can though use this content in the 'non-ML' component of the solution though,
 
 Supervised learning seems most appropriate as we're because by labelling the data we can teach the model what is important and have it apply that to recognising the difference between tenders to bid on and not to bid on. 
 
-Since we're asking a simple question ("Is this tender suitable to make a bid on or not?") that isn't something we can assume will work with un-supervised learning because there's no inherent pattern to learn/discover. We're primarily going to rely on one feature (title in tender_records) which isn't sufficient for this approach to work. 
+Since we're asking a simple question ("Is this tender suitable to make a bid on or not?") that isn't something we can assume will work with un-supervised learning because there's no inherent pattern to learn/discover. We're primarily going to rely on one feature (title in tender_records) which isn't sufficient for an un-supervised approach to work. 
 
-Similarly, semi-supervised learning isn't appropriate yet because we only have labelled records. In six, twelve or twenty-four months it might be well worth taking the baseline supervised model and re-running the training. See the section ()[Feedback and Improvements] later in this proposal.
+Similarly, semi-supervised learning isn't appropriate yet because we only have labelled records. In six, twelve or twenty-four months it might be well worth taking the baseline supervised model and re-running the training. See the section [New Features and Continuous Improvements](#new-features-and-continuous-improvements) later in this proposal.
 
 
 
@@ -183,11 +183,50 @@ Q: How do we conclude why Supervised is better/most suitable.
 
 # Workflow
 
+```mermaid
+graph TD;
+  subgraph Data_Ingestion
+    A[eTenders site update] -->|Rust crate `get_data`| B[(PostgreSQL RDS)]
+    B --> C[Model Processing Lambda]
+    C --> B
+  end
+
+  subgraph Modelling
+    B --> D[Jupyter notebook / scikit-learn]
+    D --> E[Trained model + threshold]
+  end
+
+  subgraph Deployment
+    E --> F[GitHub Actions]
+    F --> G[mdBook report & GitHub Pages]
+  end
+
+  style A fill:#fff9c4
+  style B fill:#c8e6c9
+  style D fill:#bbdefb
+  style E fill:#d1c4e9
+  style F fill:#ffe0b2
+  style G fill:#f0f4c3
+
+```
+
 # Testing and Debugging
+
+From the original (labelled) data of approx 2000 records we've carried out an 80/20 split or training and testing. Since there are new tenders being released daily we can perform the validation stage on this new, un-labelled data and perform a manual screen of the results to see how effective they are. 
 
 # Deployment
 
-# Risk and Mitigation for AI - put this at the end?
+We're employing a number of 'best in class' technologies to get the results we need. 
+
+AWS serverless Lambda functions
+ * The cheapest compute available on the cloud REF: ?
+ * Written in Rust, the fastest language for Lambda runtimes REF: 
+
+
+
+# Risk and Mitigation for AI
+
+Since the data is made up of commercial requests for suppliers to respond to a governmental body or organisation it doesn't contain Personal Identifiable Information (PIR) so isn't subject to GDPR. Ethics in AI usually gains teeth around PIR, potential for harm or abuse 
 
 # Recommendations and Conclusions (Rubrik)
 
