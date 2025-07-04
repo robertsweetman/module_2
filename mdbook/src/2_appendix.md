@@ -30,7 +30,15 @@ module_2 repo
 
 etenders.ipynb 
 * https://github.com/robertsweetman/module_2/blob/main/python/etenders.ipynb
-* Main ML model workbook, sets out all the learning and discovery steps as well as model validation & hyper-parameter tuning
+* Initial investigative ML model workbook, sets out all the learning and discovery steps as well as model validation & hyper-parameter tuning
+
+baseline_text_models.ipynb
+* https://github.com/robertsweetman/module_2/blob/main/python/baseline_text_models.ipynb
+* Checking out various text parameterization methods
+
+hybrid_text_model_main.ipynb
+* https://github.com/robertsweetman/module_2/blob/main/python/hybrid_text_model_main.ipynb
+* Final checking and hyper-parameter tuning on training data
 
 Note 1: postgres_dataload and pdf_processing Lambda functions were an attempt to use AWS Simple Queue Service (SQS) to asyncronously handle the 'pdf_processing' part of the data ingest pipeline. The idea being that we could add other POST(s) to the queue for a different lambda to process and keep the separation of concerns whereby one Lambda function executes one task. 
 
