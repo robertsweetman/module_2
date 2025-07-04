@@ -171,13 +171,18 @@ Since we're asking a simple question ("Is this tender suitable to make a bid on 
 
 Similarly, semi-supervised learning isn't appropriate yet because we only have labelled records. In six, twelve or twenty-four months it might be well worth taking the baseline supervised model and re-running the training. See the section [New Features and Continuous Improvements](#new-features-and-continuous-improvements) later in this proposal.
 
+### Rejected Ideas
 
+Initially I thought this would be possible to achieve with a decision tree (we are asking a question after all) however dealing with the main title 'text' field on it's own would mean that you end up with an int per unique title so would have too high cardinality to be useful and wouldn't deal well with titles it hasn't seen before. 
 
+### Setting off in the right direction
 
+We can one-hot encode the fields ca (contracting authorit) and procedure because they're effectively being selected from a drop-down menu when a tender is created. 
 
-Q: How do we conclude why Supervised is better/most suitable.
+Further research led me to look at 'bag-of-words' and TF-IDF to deal with the short text strings of the title field because if we can extract features from the text then this becomes actually useful.
 
-# Exploratory data analysis graphics
+The beauty of jupyter notebooks and all the associated Python libraries is that you can pretty quickly get a handle on what might workby running things locally, then 
+
 
 # Evaluation metrics
 
