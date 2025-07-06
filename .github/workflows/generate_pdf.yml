@@ -146,8 +146,41 @@ jobs:
           ls -la *.pdf
           echo "Generated both zero-margin and 5pt-margin PDFs using Puppeteer"
 
+      - name: Install Pandoc
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pandoc
+
+      - name: Generate Word Document
+        run: |
+          # Create a combined markdown file from all source files
+          echo "Creating combined markdown file..."
+          find mdbook/src -name "*.md" -not -path "*/\.*" | sort | xargs cat > combined_content.md
+          
+          # Convert the combined markdown to Word format
+          echo "Converting to Word format..."
+          pandoc combined_content.md -o documentation.docx
+          
+          # Generate a text file with word count for quick reference
+          echo "Generating word count..."
+          WC=$(wc -w combined_content.md)
+          echo "Word count from markdown source: $WC" > word_count.txt
+          
+          # Check file sizes
+          ls -la *.docx
+          cat word_count.txt
+          echo "Generated Word document and word count file"
+
       - name: Upload PDF as artifact
         uses: actions/upload-artifact@v4
         with:
           name: presentation-pdf
           path: "*.pdf"
+
+      - name: Upload Word Document as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: documentation-word
+          path: |
+            *.docx
+            word_count.txt
