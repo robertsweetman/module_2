@@ -32,9 +32,3 @@ Up-front let's say we need to get a fairly high degree of accuracy but not at th
 
 ## Projected Benefits 
 Having ML and AI provide a 'first look' screening of tenders will save Sales teams time spent on initial screening which translates into focussing only on relevant bids and having more signal & less noise should reduce the chance of missing any opportunities. 
-
-<!--
-
-
-
--->

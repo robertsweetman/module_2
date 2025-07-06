@@ -49,8 +49,88 @@ Not relevant for training so can be removed from the training data. We could _ma
 Again nearly 50% of records don't have a value and making any assumptions about these (filling in values, adding a mean) would likely only introduce innacuracies. Conversely there might be multi-million pound values hidded in the PDF content. So with this in mind we can't rely on value as a feature of the tender data for ML training. 
 
 ## Decision Tree
-Remember from [Model Selection and methodologies](./3_developing_ai_and_ml_apps.html#model-selection-and-methodologies) 
+Remember from [model Selection and methodologies](./3_developing_ai_and_ml_apps.html#model-selection-and-methodologies) that we don't believe Decision Trees will actually work well. Can we show this? 
 
+Refer to [decision_tree_model.ipynb](https://github.com/robertsweetman/module_2/blob/main/python/decision_tree_model.ipynb) preview view for the code. 
+
+Here's what we get initially...
+
+![Decision Tree Scores](./images/decision_tree_scores.png)
+
+This approach really falls down when looking for bids. We're only hitting 41% of real bids (precision) and recall is also really low. So we can say the model is excellent at recognising 'no-bids' but it's missing two-thirds of real bids and miss-labelling many non-bids as bids (low f1-score).
+
+![Decision Tree Over Under Fit](./images/decision_tree_over_under_fit.png)
+
+We can also show visually how this type of approach over-fits quite badly by plotting the learning curve. The model performs much better on data it's seen before (blue) than new data (orange). The curves don't converge and they should if the fit was good. 
+
+Most importantly, even when you add more training data the gap doesn't close which indicates the model has learnt patterns based on that only, rather than a general pattern.
+
+## Linear Regression Investigation
+
+Refer to [etenders.ipynb](https://github.com/robertsweetman/module_2/blob/main/python/etenders.ipynb) preview for the code.
+
+After we've pulled in the data to create a dataframe using a helper script it's worth taking some time to look at the data including words that push the model to 'bid' or 'no-bid'
+
+![Code for Push Words](./images/code_push_words.png)
+
+![Push Words](./images/push_words.png)
+
+We're looking at text, categorical values and numeric fields. It might also be interesting to see if the numeric field ('has-pdf') is adding any value here at all.
+
+![Code for numerics useful](./images/code_numeric_influential.png)
+
+* accuracy without text: -0.017
+* accuracy without cat: -0.031
+* accuracy without num: -0.007
+
+Looks like we can basically remove the 'has_pdf' column from the data.
+
+We can also look at what individual categories most impact or detract from a tender being market as a bid.
+
+![Categories and Procedures](./images/most_influential_ca_procedure.png)
+
+However, once we start looking at the outcomes (via a confusion matrix) we begin running into the issue with the title data as the starting point and our goal of reducing false positives and the overall 'filtering' workload.
+
+![Confusion Matrix](./images/initial_confusion_matrix.png)
+
+With a default threshold of 50% we're getting 13 Bids labelled as No-Bid i.e. a pretty high false-negative rate. Since a false negative might be worth a few million Euros this doesn't justify saving someone time doing the filtering because at this point that saving doesn't equate to the missed opportunities value...
+
+## Do tokenizer choices have a big impact?
+As an exercise I decided to look at whether tokenizer choices made an impact on this problem.
+
+Refer to [baseline_text_models.ipynb](https://github.com/robertsweetman/module_2/blob/main/python/baseline_text_models.ipynb) for the code.
+
+Just off the bat we can rule out TF-IDF + LogReg and Hashing + Log reg on the basis of the huge number of false positives which would waste our sales people's time.
+
+![Tokenizer Comparisons](./images/tokenizer_comparisons.png)
+
+![Tokenizer Comparison Results](./images/tokenizer_comparison_results.png)
+
+TFIDF + Linear SVM looks like the best overall candidate as while the false negative rate on the confusion matrix is higher than with SBERT + LogReg the false positive (time-wasting) number starts far lower. TFIDF + Linear SVM also has a higher `Bid Precision` F1 score.
+
+## Final TFIDF + Linear SVM model
+
+Refer to [tfidf_linearSVM.ipynb](https://github.com/robertsweetman/module_2/blob/main/python/tfidf_linearSVM.ipynb)
+
+Let's take everything we've learned and put it into play.
+
+![Analysis and Confusion Matrix](./images/tfidf_analysis.png)
+
+What we see is that we're now hitting few false negatives and have a high recall but to get this we've had to set our probability threshold very low indeed, meaning workers are still having to review 25% of bids, given the high false positive rate.
+
+![TFIDF Summary](./images/tfidf_summary.png)
+
+We can attempt to add a cost weighting to false negatives but at this threshold level that has zero impact. Changing the threshold directly impacts the decision boundary so we can impact false negatives that way BUT we've now got to a point where it's clear that the model needs more data. 
+
+![Probability Distribution](./images/probability_distribution.png)
+
+Around the 0.385 threshold there's nothing we can do to influence the model further. 
+
+![Learning Curve](./images/learning_curve_svm.png)
+
+Since the scores are still a way away and haven't converged this also suggests we could do with more data... However, on the positive side it's not over or under-fitting like the Decistion Tree.
+
+More on how to improve things in the [Recommendations and Conclusions](./6_recommendations_and_conclusions.md) section.
 
 ## Ethical Considerations
 
