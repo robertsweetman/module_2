@@ -32,6 +32,10 @@ etenders.ipynb
 * https://github.com/robertsweetman/module_2/blob/main/python/etenders.ipynb
 * Initial investigative ML model workbook, sets out all the learning and discovery steps as well as model validation & hyper-parameter tuning
 
+decision_tree_model.ipynb
+* https://github.com/robertsweetman/module_2/blob/main/python/decision_tree_model.ipynb
+* Looking at decision tree approach and why this won't work in this case, with diagrams/plots for proof
+
 baseline_text_models.ipynb
 * https://github.com/robertsweetman/module_2/blob/main/python/baseline_text_models.ipynb
 * Checking out various text parameterization methods

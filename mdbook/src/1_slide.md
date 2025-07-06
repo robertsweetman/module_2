@@ -99,15 +99,17 @@ At first glance the tender information looks pretty straightforward. Each record
 | value       | text         | what is the tender worth?                      | numeric                |
 | bid         | integer      | ML label: 1=bid, 0=no bid, NULL=unlabelled     | integer                |
 
+We then have another process getting the PDF content, counting the number of tender codes we're interested in and storing them as a text array. Initially we're going to try to run our ML model training on the 'title' field and a few others because 25% of tenders do not have a PDF associated with them. We're also going to exclude the 'value' field because only half of tenders have a value.
+
 **pdf content** table
-| Column name          | Type                    | Description                                            | 
-|----------------------|-------------------------|--------------------------------------------------------|
-| resource_id          | text                    | unique internal record number of the tender            |
-| pdf_text             | text                    | content of the tender pdf                              |
-| extraction_timestamp | timestamp with timezone | when was the pdf read into the db?                     |
-| processing status    | text                    | has the pdf been processed properly?                   |
-| detected codes       | text array              | what codes have been identified in the tender?         |
-| codes_count          | integer                 | how many codes were found?                             |
+| Column name          | Type                    | Description                                            | Modified Type | Drop | 
+|----------------------|-------------------------|--------------------------------------------------------|---------------|------|
+| resource_id          | text                    | unique internal record number of the tender            | integer       |      |
+| pdf_text             | text                    | content of the tender pdf                              | text          |      |
+| extraction_timestamp | timestamp with timezone | when was the pdf read into the db?                     | timestamp etc.|  y   |
+| processing status    | text                    | has the pdf been processed properly?                   | text          |  y   |
+| detected codes       | text array              | what codes have been identified in the tender?         | text array    |      |
+| codes_count          | integer                 | how many codes were found?                             | integer       |      |
 
 All this has been pulled into PostgreSQL database for easy manipulation. New tenders are pulled into the database on a daily basis as they're published, which includes parsing (reading and storing) pdf text as well since this contains some very useful additional context. 
 
@@ -188,53 +190,7 @@ The beauty of jupyter notebooks and all the associated Python libraries is that 
 
 # Workflow
 
-```mermaid
-graph TD;
-  subgraph Data_Ingestion
-    A[eTenders site update] -->|Rust crate get_data| B[(PostgreSQL RDS)]
-    B -->|publish new tender| I[SNS / SQS]
-  end
 
-  subgraph Modelling
-    B --> D[Jupyter / scikit-learn]
-    D --> E[Trained model + threshold]
-  end
-
-  subgraph ML_Ops
-    E --> H[S3: model artifact]
-  end
-
-  subgraph Inference
-    I --> L[Inference Lambda]
-    H --> L
-    L -->|write recommendation| B
-    L -->|bid recommendation=yes| J[Bid SNS]
-  end
-
-  subgraph Notifications
-    J --> M[Notify Sales Lambda]
-    M --> N[SES Email]
-  end
-
-  subgraph Reporting
-    E --> F[GitHub Actions]
-    F --> G[mdBook report & GitHub Pages]
-  end
-
-  %% Styling
-  style A fill:#fff9c4,color:#000
-  style B fill:#c8e6c9,color:#000
-  style D fill:#bbdefb,color:#000
-  style E fill:#d1c4e9,color:#000
-  style H fill:#d7ccc8,color:#000
-  style I fill:#ffe082,color:#000
-  style L fill:#90caf9,color:#000
-  style F fill:#ffe0b2,color:#000
-  style G fill:#f0f4c3,color:#000
-  style J fill:#ffe082,color:#000
-  style M fill:#a5d6a7,color:#000
-  style N fill:#c5cae9,color:#000
-```
 
 # Testing and Debugging
 
