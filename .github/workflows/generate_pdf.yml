@@ -13,24 +13,24 @@ jobs:
         run: |
           tag=$(curl 'https://api.github.com/repos/rust-lang/mdbook/releases/latest' | jq -r '.tag_name')
           url="https://github.com/rust-lang/mdbook/releases/download/${tag}/mdbook-${tag}-x86_64-unknown-linux-gnu.tar.gz"
-          mkdir -p crates/mdbook
-          curl -sSL $url | tar -xz --directory=./crates/mdbook
-          echo ${GITHUB_WORKSPACE}/crates/mdbook >> $GITHUB_PATH
+          mkdir -p mdbook
+          curl -sSL $url | tar -xz --directory=./mdbook
+          echo ${GITHUB_WORKSPACE}/mdbook >> $GITHUB_PATH
 
       - name: Install mdbook-mermaid preprocessor
         run: |
-          curl -sSL https://github.com/badboy/mdbook-mermaid/releases/download/v0.12.6/mdbook-mermaid-v0.12.6-x86_64-unknown-linux-gnu.tar.gz | tar -xz --directory=./crates/mdbook
+          curl -sSL https://github.com/badboy/mdbook-mermaid/releases/download/v0.12.6/mdbook-mermaid-v0.12.6-x86_64-unknown-linux-gnu.tar.gz | tar -xz --directory=./mdbook
           # Ensure the mdbook-mermaid executable is in PATH
-          # echo ${GITHUB_WORKSPACE}/crates/mdbook >> $GITHUB_PATH
+          # echo ${GITHUB_WORKSPACE}/mdbook >> $GITHUB_PATH
           # Install mermaid support
-          cd crates/mdbook
+          cd mdbook
           mdbook-mermaid install .
 
       - name: Set up image paths
         run: |
-          # Create images directory at the root and copy images from crates/mdbook/src/images
+          # Create images directory at the root and copy images from mdbook/src/images
           mkdir -p images
-          cp -r crates/mdbook/src/images/* images/
+          cp -r mdbook/src/images/* images/
 
           # Verify the images are in place
           ls -la images/
@@ -39,15 +39,15 @@ jobs:
         run: |
           # List available executables in the PATH
           echo "Contents of mdbook directory:"
-          ls -la ${GITHUB_WORKSPACE}/crates/mdbook
+          ls -la ${GITHUB_WORKSPACE}/mdbook
 
           # Change to the mdbook directory and build the book
-          cd crates/mdbook
+          cd mdbook
           mdbook build
-          cd ../..
+          cd ..
 
           # Copy the built book to the root for PDF generation
-          cp -r crates/mdbook/book ./book
+          cp -r mdbook/book ./book
 
           # Verify the book was copied
           ls -la book/
