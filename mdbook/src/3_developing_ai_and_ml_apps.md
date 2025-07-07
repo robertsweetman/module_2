@@ -10,7 +10,7 @@ Stakeholders, in this case Version 1's Sales Team for Ireland, would clearly lov
 ### Prototype
 
 #### Data Gathering
-We can automate data gathering, manipulation and storage by leveraging infrastructure as code (IaC) tools like Terraform. This brings up an AWS RDS PostgreSQL database in the cloud, uses AWS Lambdas (written in Rust for speed and cheapness) REF: to get the data and pipe the data into the database.
+We can automate data gathering, manipulation and storage by leveraging infrastructure as code (IaC) tools like Terraform. This brings up an AWS RDS PostgreSQL database in the cloud, uses AWS Lambdas (written in Rust for speed and cheapness) (Loige.co 2023) to get the data and pipe the data into the database.
 
 To avoid the "it works on my machine" problem we should use GitHub Actions to drive cloud deployment, Lambda updates and ultimately ML execution/testing/training. Using action runners means anyone in the team can update the application, following appropriate review of course.
 
@@ -24,7 +24,7 @@ Here's where the key testing and investigation work around ML happens.
 ### Development
 Following architectural design and planning this phase runs in 2 week sprints to fulfill user stories that deliver incremental value. This ensures that if any blockers do arise they're identified early and don't derail the entire project in the last weeks. 
 
-A key section in here is testing that 'all' tender records can be ingested, and making sure there's schema checks around data ingestion. As we're using Rust for a lot of the data pipeline it's type and compiler checking add a lot of value here. REF: needed!
+A key section in here is testing that 'all' tender records can be ingested, and making sure there are schema checks around data ingestion. As we're using Rust for a lot of the data pipeline it's type and compiler checking add a lot of value here.
 
 ### Deployment
 Before official 'go-live' everything runs in the cloud environment as a 'smoke test' but the results are private and highly scrutinised by the development team. Once they're happy a go/no-go decision can be made in consultation with the stakeholders, based on the results from running the ML model and reviewing the tenders it's suggesting, as well as those it's rejected. 
