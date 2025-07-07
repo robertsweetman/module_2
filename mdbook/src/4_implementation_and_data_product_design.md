@@ -97,9 +97,9 @@ TFIDF + Linear SVM looks like the best overall candidate as while the false nega
 
 ## Final TFIDF + Linear SVM model
 
-Refer to [tfidf_linearSVM.ipynb](https://github.com/robertsweetman/module_2/blob/main/python/tfidf_linearSVM.ipynb)
+Refer to [tfidf_linearSVM.ipynb](https://github.com/robertsweetman/module_2/blob/main/python/tfidf_linearSVM.ipynb) for the code.
 
-Let's take everything we've learned and put it into play.
+Let's take everything we've learned about our problem space and put it into play.
 
 ![Analysis and Confusion Matrix](./images/tfidf_analysis.png)
 

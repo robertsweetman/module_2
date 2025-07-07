@@ -18,7 +18,7 @@ These steps would enrich the data and lead to much more reliable results.
 
 Since it's mainly a case of pulling this from our PostgreSQL db and running things again it wouldn't take a huge amount of development effort to add this. 
 
-Sadly just using the tender title wasn't enough but we have a solid way forwards. 
+Sadly just using the tender title wasn't enough but we have a solid path forwards. 
 
 ## Further Improvements and evaluation
 
