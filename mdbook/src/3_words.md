@@ -19,24 +19,23 @@ Python's wide range of ML libraries, and Jupyter notebooks allow us to quickly i
 
 It's not simply a case of throwing some data at a model, getting a nice looking F1 score (or something else) and deploying it. We absolutely have to take into account the business requirements.
 
-At the same time we don't want to over-commit to an approach and find out later on it won't meet the business requirements. Here's where the key testing and investigation work around ML happens.
+Here's where the key testing and investigation work around ML happens.
 
 ### Development
-Following architectural design and planning this phase runs in 2 week sprints to fulfill user stories that deliver incremental value. This ensures that if any blockers do arise they're identified early and don't derail or halt the entire project in the last week. 
+Following architectural design and planning this phase runs in 2 week sprints to fulfill user stories that deliver incremental value. This ensures that if any blockers do arise they're identified early and don't derail the entire project in the last weeks. 
 
-A key section in here is testing that 'all' tender records can be ingested, making sure there's test for that as well as schema checks around data ingestion. As we're using Rust for a lot of the data pipeline it's type checking and compiler checking add a lot of value here. REF: needed!
+A key section in here is testing that 'all' tender records can be ingested, and making sure there's schema checks around data ingestion. As we're using Rust for a lot of the data pipeline it's type and compiler checking add a lot of value here. REF: needed!
 
 ### Deployment
-Before official 'go-live' everything runs in the cloud environment as a 'smoke test' but the results are private and highly scritinised by the development team. Once they're happy a go/no-go decision can be made in consultation with the stakeholders, based on the results from running the ML model and reviewing the tenders it's suggesting, as well as those it's rejected. From the business requirements we also need to look for false negatives!
+Before official 'go-live' everything runs in the cloud environment as a 'smoke test' but the results are private and highly scritinised by the development team. Once they're happy a go/no-go decision can be made in consultation with the stakeholders, based on the results from running the ML model and reviewing the tenders it's suggesting, as well as those it's rejected. 
 
 We can extend the automation already used in the prototyping phase to actually deploy the production components, update the ML model, update various Lambda functions and add functionality like informing the sales team that a bid should be looked at. 
 
-After the deployment is officially live we might find users have feedback or there might be updates needed to deal with un-forseen issues. Since the deployment pipeline is now automated this shouldn't prove too challenging.
-
+After the deployment is live we might find users have feedback or there might be updates needed to deal with un-forseen issues. Since the deployment pipeline is now automated this shouldn't prove too challenging.
 
 ## Model selection and methodologies
 
-We're looking to make a decision ("bid on this or not?") so it seemed immediately obvious to start our investigation using a decision tree. However, there's a fundamental issue with that assumption because our main piece of data on which to answer this bid/no-bid question is the tender title, which is all text. Additionally our data is highly weighted towards 'no-bid' as an outcome which makes using decision trees problematic. REF:
+We're looking to make a decision ("bid on this or not?") so it seemed immediately obvious to start our investigation using a decision tree. However, there's a fundamental issue with that assumption because our main piece of data on which to answer this bid/no-bid question is the tender title, which is all text. Additionally our data is highly weighted towards 'no-bid' as an outcome which makes using decision trees problematic. (Otten, 2024)
 
 Think of it this way, the text field is going to be turned into a large list of numbers with one dimension per possible word, most of which aren't useful so end up being zero.
 
@@ -47,4 +46,6 @@ With this in minde we need to look at what's better at least for this type of da
 If we use a Logistic (linear) Regression instead, every text feature is treated independently and there's no branching that the model might memorise. Also, having a lot of 'non-interesting' words doesn't have a massive impact as well as being better able to handle words it's not seen before. You get enough of a signal from words it does know about as opposed to a decision tree where if something doesn't appear in a tree 'branch' it fails to generate a score at all. This approach copes a lot better with previously unseen titles.
 
 We will see this tendency for decision trees to over-fit in the analysis later.
+
+
 

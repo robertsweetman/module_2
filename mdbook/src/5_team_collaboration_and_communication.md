@@ -1,7 +1,9 @@
 # Team Collaboration and Communication plan
 
 ## Collaboration
-Modern software development now sits on top of a whole tool chain to surface work, encourage transparency and foster communication. In this type of project we'd keep all the code in source control (Git), all the tasks in Jira and run a daily agile-type stand-up to share progress or air any blockers. We could also add Slack or Teams for quick threads about particular issues or problems.
+Modern software development now sits on top of a whole tool chain to surface work, encourage transparency and foster communication. In this type of project we'd keep all the code in source control (Git), all the tasks in Jira and run a daily agile-type stand-up to share progress or air any blockers. 
+
+There's usually a chat app like Slack or Teams for quick threads to tackle particular issues or problems.
 
 Outside the feature development being carried out by developers there would be a Team Lead, nominally set with tasking individuals with work as well as acting as an arbiter on technical direction. Possibly there would be a Software Architect fulfilling this role but if it's a smaller project this might be un-necessary. 
 
@@ -144,7 +146,7 @@ gantt
     Update Model :crit, a6, after a5, 2w
 ```
 
-There are stage gates following prototype delivery and after the model has been deployed for a number of weeks (smoke test). This first gate gives stakeholders the opportunity to see how the application would work in theory. The second gate is for developers to check that the solution actually works in practice before 'go-live'. 
+There are stage gates following prototype delivery and after the model has been deployed (smoke test) for a number of weeks. This first gate gives stakeholders the opportunity to see how the application would work in theory. The second gate is for developers to check that the solution actually works in practice before 'go-live'. 
 
 Then, once it's been running for two to four weeks updates can be made based on live data and user feedback. Maybe there's some part of the performance that needs tweaking?
 
