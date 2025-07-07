@@ -35,12 +35,29 @@ jobs:
           # Verify the images are in place
           ls -la images/
 
-      - name: Build Book
+      - name: Create modified book without appendix/references
         run: |
-          # List available executables in the PATH
-          echo "Contents of mdbook directory:"
-          ls -la ${GITHUB_WORKSPACE}/mdbook
+          # Create a copy of the mdbook source
+          cp -r mdbook mdbook_main_content
 
+          # Create a modified version of SUMMARY.md that excludes 7_appendix.md and 8_references.md
+          cd mdbook_main_content
+          
+          # Create the modified SUMMARY.md by removing lines containing 7_appendix.md and 8_references.md
+          cat src/SUMMARY.md | grep -v -E '7_appendix\.md|8_references\.md' > src/SUMMARY.md.new
+          mv src/SUMMARY.md.new src/SUMMARY.md
+          
+          # Build the modified book
+          mdbook build
+          
+          # Go back to root
+          cd ..
+          
+          # Copy the built book to the root for PDF generation
+          cp -r mdbook_main_content/book ./book_main_content
+
+      - name: Build Full Book
+        run: |
           # Change to the mdbook directory and build the book
           cd mdbook
           mdbook build
@@ -49,10 +66,11 @@ jobs:
           # Copy the built book to the root for PDF generation
           cp -r mdbook/book ./book
 
-          # Verify the book was copied
+          # Verify the books were copied
+          echo "Full book contents:"
           ls -la book/
-          echo "Checking for print.html:"
-          ls -la book/print.html
+          echo "Main content book (no appendix/references):"
+          ls -la book_main_content/
 
       # Add Node.js setup for Puppeteer
       - name: Setup Node.js
@@ -63,12 +81,14 @@ jobs:
       - name: Install Puppeteer
         run: npm install puppeteer@13.5.0
 
-      - name: Generate PDF using Puppeteer
+      - name: Generate PDFs using Puppeteer
         run: |
           cat > pdf-generator.js << 'EOL'
           const puppeteer = require('puppeteer');
+          const fs = require('fs');
+          const path = require('path');
 
-          // Helper function for waiting that works with older Puppeteer versions
+          // Helper function for waiting
           async function wait(page, ms) {
             if (page.waitForTimeout) {
               await page.waitForTimeout(ms);
@@ -79,61 +99,72 @@ jobs:
             }
           }
 
-          (async () => {
-            // Launch browser with necessary flags for GitHub Actions environment
+          // Function to generate PDF from HTML
+          async function generatePDF(htmlPath, pdfPath, options) {
             const browser = await puppeteer.launch({
               args: ['--no-sandbox', '--disable-setuid-sandbox']
             });
-            const page = await browser.newPage();
             
-            // Set viewport to A4 size
-            await page.setViewport({
-              width: 1240,
-              height: 1754,
-              deviceScaleFactor: 1,
-            });
-            
-            // Navigate to the print.html page (already prepared by mdbook for printing)
-            await page.goto(`file://${process.cwd()}/book/print.html`, {
-              waitUntil: 'networkidle0'
-            });
-            
-            // Wait extra time for mermaid diagrams to render
-            await wait(page, 3000);
-            
-            // Force mermaid to re-render
-            await page.evaluate(() => {
-              if (typeof mermaid !== 'undefined') {
-                mermaid.init(undefined, document.querySelectorAll('.mermaid'));
-              }
-            });
-            
-            // Wait again for rendering
-            await wait(page, 2000);
-            
-            // Generate PDF with no margins for presentation style
-            await page.pdf({
-              path: 'no_margin.pdf',
-              format: 'A4',
-              printBackground: true,
-              margin: { top: '0', right: '0', bottom: '0', left: '0' }
-            });
-            
-            // Generate PDF with small margins
-            await page.pdf({
-              path: 'presentation.pdf',
-              format: 'A4',
-              printBackground: true,
+            try {
+              const page = await browser.newPage();
+              
+              // Set viewport to A4 size
+              await page.setViewport({
+                width: 1240,
+                height: 1754,
+                deviceScaleFactor: 1,
+              });
+              
+              // Navigate to the print.html page
+              await page.goto(`file://${process.cwd()}/${htmlPath}`, {
+                waitUntil: 'networkidle0'
+              });
+              
+              // Wait for mermaid diagrams to render
+              await wait(page, 3000);
+              
+              // Force mermaid to re-render
+              await page.evaluate(() => {
+                if (typeof mermaid !== 'undefined') {
+                  mermaid.init(undefined, document.querySelectorAll('.mermaid'));
+                }
+              });
+              
+              // Wait again for rendering
+              await wait(page, 2000);
+              
+              // Generate PDF
+              await page.pdf({
+                path: pdfPath,
+                format: 'A4',
+                printBackground: true,
+                ...options
+              });
+              
+              console.log(`PDF generated: ${pdfPath}`);
+            } finally {
+              await browser.close();
+            }
+          }
+
+          (async () => {
+            // Generate full PDF
+            await generatePDF('book/print.html', 'full_content.pdf', {
               margin: { top: '5mm', right: '5mm', bottom: '5mm', left: '5mm' },
               displayHeaderFooter: true,
               footerTemplate: '<div style="width: 100%; text-align: right; font-size: 8pt; color: #999; padding-right: 10px;"><span class="pageNumber"></span>/<span class="totalPages"></span></div>',
               headerTemplate: '<div></div>'
             });
             
-            // Close browser
-            await browser.close();
+            // Generate main content PDF (no appendix/references)
+            await generatePDF('book_main_content/print.html', 'main_content.pdf', {
+              margin: { top: '5mm', right: '5mm', bottom: '5mm', left: '5mm' },
+              displayHeaderFooter: true,
+              footerTemplate: '<div style="width: 100%; text-align: right; font-size: 8pt; color: #999; padding-right: 10px;"><span class="pageNumber"></span>/<span class="totalPages"></span></div>',
+              headerTemplate: '<div></div>'
+            });
             
-            console.log('PDFs generated successfully');
+            console.log('All PDFs generated successfully');
           })().catch(err => {
             console.error('Error generating PDFs:', err);
             process.exit(1);
@@ -144,63 +175,52 @@ jobs:
 
           # Check file sizes
           ls -la *.pdf
-          echo "Generated both zero-margin and 5pt-margin PDFs using Puppeteer"
+          echo "Generated both full content and main content PDFs"
 
       - name: Install Pandoc and dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y pandoc libreoffice
 
-      - name: Generate Word Document
+      - name: Generate Word Documents
         run: |
-          # Method 1: Convert from HTML to DOCX
-          # This preserves the rendered Mermaid diagrams
-          echo "Converting from rendered HTML to Word format..."
-          pandoc -f html -t docx book/print.html -o documentation_from_html.docx --extract-media=extracted_media
-
-          # Method 2: Convert PDF to DOCX using LibreOffice (as a backup)
-          echo "Converting from PDF to Word format..."
-          soffice --headless --convert-to docx presentation.pdf
+          # Convert the full content PDF to DOCX
+          echo "Converting full content PDF to Word format..."
+          soffice --headless --convert-to docx full_content.pdf
           
-          # Create a special version with appendix and references removed for accurate word count
-          echo "Generating word count without appendix and references..."
+          # Convert the main content PDF to DOCX
+          echo "Converting main content PDF to Word format..."
+          soffice --headless --convert-to docx main_content.pdf
+          
+          # Also create Word documents directly from HTML
+          echo "Converting full content HTML to Word format..."
+          pandoc -f html -t docx book/print.html -o full_content_from_html.docx --extract-media=extracted_media_full
+          
+          echo "Converting main content HTML to Word format..."
+          pandoc -f html -t docx book_main_content/print.html -o main_content_from_html.docx --extract-media=extracted_media_main
           
           # Get text-only content from HTML for accurate word counting
           pandoc -f html -t plain book/print.html > full_text_content.txt
-          
-          # Create a version without appendix and references
-          # This pattern will look for headers that match the appendix and references and remove them and all following content
-          cat full_text_content.txt | sed -n '1,/^[[:space:]]*7[\.[:space:]]*Appendix/p' | sed '$d' > main_content.txt
+          pandoc -f html -t plain book_main_content/print.html > main_content_text.txt
           
           # Calculate word counts
           TOTAL_WORDS=$(wc -w < full_text_content.txt)
-          MAIN_WORDS=$(wc -w < main_content.txt)
+          MAIN_WORDS=$(wc -w < main_content_text.txt)
           
           # Calculate the words in appendix and references
           APPENDIX_REF_WORDS=$((TOTAL_WORDS - MAIN_WORDS))
           
           # Create the word count info file
           echo "=== Word Count Information ===" > word_count_info.txt
-          echo "Total word count (including appendix and references): $TOTAL_WORDS" >> word_count_info.txt
-          echo "Main content word count (excluding appendix and references): $MAIN_WORDS" >> word_count_info.txt
+          echo "Full document word count: $TOTAL_WORDS" >> word_count_info.txt
+          echo "Main content word count (no appendix/references): $MAIN_WORDS" >> word_count_info.txt
           echo "Words in appendix and references: $APPENDIX_REF_WORDS" >> word_count_info.txt
           echo "" >> word_count_info.txt
-          echo "Note: Word counts are approximate and exclude mermaid diagrams and code blocks" >> word_count_info.txt
-          
-          # Create a markdown-only version for content verification
-          echo "# Main Content Only (for word count)" > main_content_only.md
-          cat main_content.txt >> main_content_only.md
-          
-          echo "# Full Content (with appendix and references)" > full_content.md
-          cat full_text_content.txt >> full_content.md
-          
-          # Convert these to Word for reference
-          pandoc main_content_only.md -o main_content_only.docx
           
           # List produced files
-          ls -la *.docx
+          ls -la *.docx *.pdf
           cat word_count_info.txt
-          echo "Generated Word documents with separate word counts for main content and full document"
+          echo "Generated Word documents for both full content and main content"
 
       - name: Upload PDF as artifact
         uses: actions/upload-artifact@v4
@@ -214,6 +234,5 @@ jobs:
           name: documentation-word
           path: |
             *.docx
-            *.md
             word_count_info.txt
-            extracted_media/
+            extracted_media*/
