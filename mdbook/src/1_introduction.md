@@ -3,7 +3,7 @@
 ## Overview
 The Irish Government releases a huge range of tenders daily via email. These range from bin collection, recruitment services, building managment all the way through to ones we are interested in - IT services/consulting contracts. 
 
-Wading through this fire-host of information manually is time-consuming, inefficient and can lead to missed opportunities. 
+Wading through this firehose of information manually is time-consuming, inefficient and can lead to missed opportunities. 
 
 By training an ML model on the tenders data we should be able to answer the question "Which ones should we 'actually' bid on?" as opposed to having someone wade through 50 new tender opportunities per day.
 

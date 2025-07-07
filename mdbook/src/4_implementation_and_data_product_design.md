@@ -121,7 +121,7 @@ More on how to improve things in the [Recommendations and Conclusions](./6_recom
 
 ## Ethical Considerations
 
-Training ML models should pay attention to local laws & statutes (i.e. GDPR), ensure the data is used in an ethical way and aim for transparency when it comes to any decisions that are under-pinned by any sort of AI or ML training process.
+Training ML models should pay attention to local laws & statutes (i.e. GDPR), ensure the data is used in an ethical way and aim for transparency when it comes to any decisions that are underpinned by any sort of AI or ML training process.
 
 Version 1 also has a AI Governance framework (Transforming AI Governance, 2025) that goes through a number of discovery steps to ensure directives around AI are adhered to, maintain compliance and ensure any ethical and social implications are made clear to all parties involved.
 

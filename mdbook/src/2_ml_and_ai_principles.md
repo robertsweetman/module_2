@@ -1,4 +1,4 @@
-# Machine Learning and AI principals
+# Machine Learning and AI principles
 
 ## ML and AI in this use-case
 Let's clarify the difference between Machine Learning (ML) and AI since ML has been very much been run over by AI hype.
@@ -17,7 +17,7 @@ Similarly, semi-supervised learning isn't appropriate yet because we only have l
 
 One of the key aspects of software development that especially applies to ML is quick iterations to see what may give a useful result. 
 
-We can use jupyter notebooks and Python's ML libraries for this 'prototyping and analysis' phase. This can site very easily within the larger project and quickly drive the 'ML' part of the solution.
+We can use jupyter notebooks and Python's ML libraries for this 'prototyping and analysis' phase. This can sit very easily within the larger project and quickly drive the 'ML' part of the solution.
 
 Breaking the delivery down into two week sprints, setting stage goals, reviewing the work on a regular basis with the stakeholders are all part of modern software delivery. An agile approach allows developers to change direction when faced with new information or requirements.
 

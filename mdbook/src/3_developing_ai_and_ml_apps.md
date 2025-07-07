@@ -27,11 +27,11 @@ Following architectural design and planning this phase runs in 2 week sprints to
 A key section in here is testing that 'all' tender records can be ingested, and making sure there's schema checks around data ingestion. As we're using Rust for a lot of the data pipeline it's type and compiler checking add a lot of value here. REF: needed!
 
 ### Deployment
-Before official 'go-live' everything runs in the cloud environment as a 'smoke test' but the results are private and highly scritinised by the development team. Once they're happy a go/no-go decision can be made in consultation with the stakeholders, based on the results from running the ML model and reviewing the tenders it's suggesting, as well as those it's rejected. 
+Before official 'go-live' everything runs in the cloud environment as a 'smoke test' but the results are private and highly scrutinised by the development team. Once they're happy a go/no-go decision can be made in consultation with the stakeholders, based on the results from running the ML model and reviewing the tenders it's suggesting, as well as those it's rejected. 
 
 We can extend the automation already used in the prototyping phase to actually deploy the production components, update the ML model, update various Lambda functions and add functionality like informing the sales team that a bid should be looked at. 
 
-After the deployment is live we might find users have feedback or there might be updates needed to deal with un-forseen issues. Since the deployment pipeline is now automated this shouldn't prove too challenging.
+After the deployment is live we might find users have feedback or there might be updates needed to deal with unforseen issues. Since the deployment pipeline is now automated this shouldn't prove too challenging.
 
 ```mermaid
 graph TD;

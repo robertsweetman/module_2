@@ -5,9 +5,9 @@ Modern software development now sits on top of a whole tool chain to surface wor
 
 There's usually a chat app like Slack or Teams for quick threads to tackle particular issues or problems.
 
-Outside the feature development being carried out by developers there would be a Team Lead, nominally set with tasking individuals with work as well as acting as an arbiter on technical direction. Possibly there would be a Software Architect fulfilling this role but if it's a smaller project this might be un-necessary. 
+Outside the feature development being carried out by developers there would be a Team Lead, nominally set with tasking individuals with work as well as acting as an arbiter on technical direction. Possibly there would be a Software Architect fulfilling this role but if it's a smaller project this might be unnecessary. 
 
-The Team Lead would also likely inteface to the Project Manager who would have overall responsibility for reporting outwards as to the state of the development, especially in relation to time to completion. Their role involves understanding the true state of the project and communicating this to stake-holders. Expectation management is key here, especially if something un-expected comes up and there _might_ be a possible delay. 
+The Team Lead would also likely interface to the Project Manager who would have overall responsibility for reporting outwards as to the state of the development, especially in relation to time to completion. Their role involves understanding the true state of the project and communicating this to stake-holders. Expectation management is key here, especially if something un-expected comes up and there _might_ be a possible delay. 
 
 You could easily use dashboards to broadcast the current project state, identify key milestones and plot progress along a gantt chart (see below)
 
@@ -153,5 +153,5 @@ Then, once it's been running for two to four weeks updates can be made based on 
 ## Sharing Best Practices
 From my experience within Version 1 the primary way that best practices are shared is via 'lunch and learn' sessions. It's always challenging to pull people's attention from client work so recorded sessions make the information more accessible. 
 
-Keeping these up-to-date might mean creating your own internal news letter, blog or wiki that updates the same topic when new or better ways of doing things come to light. Making this content public also massivley boosts the organisations visibility and credibility in the wider world.
+Keeping these up-to-date might mean creating your own internal news letter, blog or wiki that updates the same topic when new or better ways of doing things come to light. Making this content public also massively boosts the organisations visibility and credibility in the wider world.
 

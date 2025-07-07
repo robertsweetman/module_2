@@ -22,4 +22,4 @@ Sadly just using the tender title wasn't enough but we have a solid path forward
 
 ## Further Improvements and evaluation
 
-At some point an additional step would be to cross reference the bid/tenders database with "actual bids won" as well. This could add another layer to the entire excercise whereby it might also be possible to further increase the accuracy of our tender submission scanning and (with enough wins) possibly predict, based on past successes, whether a new tender is likely something we might win also.
+At some point an additional step would be to cross reference the bid/tenders database with "actual bids won" as well. This could add another layer to the entire exercise whereby it might also be possible to further increase the accuracy of our tender submission scanning and (with enough wins) possibly predict, based on past successes, whether a new tender is likely something we might win also.
