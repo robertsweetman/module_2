@@ -162,21 +162,45 @@ jobs:
           echo "Converting from PDF to Word format..."
           soffice --headless --convert-to docx presentation.pdf
           
-          # Get word count from both methods for comparison
-          echo "Generating word count info..."
-          echo "=== Word Count Information ===" > word_count_info.txt
-          echo "Note: HTML conversion preserves diagrams but may include navigation elements" >> word_count_info.txt
-          echo "PDF conversion preserves all formatting exactly as in the PDF" >> word_count_info.txt
-          echo "" >> word_count_info.txt
+          # Create a special version with appendix and references removed for accurate word count
+          echo "Generating word count without appendix and references..."
           
-          # Get text-only content from HTML for more accurate word counting
-          pandoc -f html -t plain book/print.html > text_only_content.txt
-          echo "Word count from text-only content: $(wc -w text_only_content.txt)" >> word_count_info.txt
+          # Get text-only content from HTML for accurate word counting
+          pandoc -f html -t plain book/print.html > full_text_content.txt
+          
+          # Create a version without appendix and references
+          # This pattern will look for headers that match the appendix and references and remove them and all following content
+          cat full_text_content.txt | sed -n '1,/^[[:space:]]*7[\.[:space:]]*Appendix/p' | sed '$d' > main_content.txt
+          
+          # Calculate word counts
+          TOTAL_WORDS=$(wc -w < full_text_content.txt)
+          MAIN_WORDS=$(wc -w < main_content.txt)
+          
+          # Calculate the words in appendix and references
+          APPENDIX_REF_WORDS=$((TOTAL_WORDS - MAIN_WORDS))
+          
+          # Create the word count info file
+          echo "=== Word Count Information ===" > word_count_info.txt
+          echo "Total word count (including appendix and references): $TOTAL_WORDS" >> word_count_info.txt
+          echo "Main content word count (excluding appendix and references): $MAIN_WORDS" >> word_count_info.txt
+          echo "Words in appendix and references: $APPENDIX_REF_WORDS" >> word_count_info.txt
+          echo "" >> word_count_info.txt
+          echo "Note: Word counts are approximate and exclude mermaid diagrams and code blocks" >> word_count_info.txt
+          
+          # Create a markdown-only version for content verification
+          echo "# Main Content Only (for word count)" > main_content_only.md
+          cat main_content.txt >> main_content_only.md
+          
+          echo "# Full Content (with appendix and references)" > full_content.md
+          cat full_text_content.txt >> full_content.md
+          
+          # Convert these to Word for reference
+          pandoc main_content_only.md -o main_content_only.docx
           
           # List produced files
           ls -la *.docx
           cat word_count_info.txt
-          echo "Generated Word documents using multiple methods"
+          echo "Generated Word documents with separate word counts for main content and full document"
 
       - name: Upload PDF as artifact
         uses: actions/upload-artifact@v4
@@ -190,5 +214,6 @@ jobs:
           name: documentation-word
           path: |
             *.docx
+            *.md
             word_count_info.txt
             extracted_media/
