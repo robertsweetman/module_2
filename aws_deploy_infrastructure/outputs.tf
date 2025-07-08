@@ -22,3 +22,8 @@ output "pdf_processing_queue_url" {
 output "pdf_processing_dlq_url" {
   value = aws_sqs_queue.pdf_processing_dlq.url
 }
+
+output "db_credentials_secret_arn" {
+  description = "ARN of the Secrets Manager secret that stores DB credentials"
+  value       = aws_secretsmanager_secret.db_credentials.arn
+} 
