@@ -42,7 +42,11 @@ baseline_text_models.ipynb
 
 hybrid_text_model_main.ipynb
 * https://github.com/robertsweetman/module_2/blob/main/python/hybrid_text_model_main.ipynb
-* Final checking and hyper-parameter tuning on training data
+* Looking at hyper-parameter tuning on training data
+
+tfidf_linearSVM.ipynb
+* https://github.com/robertsweetman/module_2/blob/main/python/tfidf_linearSVM.ipynb
+* Final model selection and validation, using TF-IDF vectorization and linear SVM classifier
 
 Note 1: postgres_dataload and pdf_processing Lambda functions were an attempt to use AWS Simple Queue Service (SQS) to asynchronously handle the 'pdf_processing' part of the data ingest pipeline. The idea being that we could add other POST(s) to the queue for a different lambda to process and keep the separation of concerns whereby one Lambda function executes one task. 
 
