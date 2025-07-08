@@ -12,11 +12,13 @@ We should manually review 25% of the tenders that don't have PDFs and add more c
 * Additional amount of text from the PDF's
   * The "Lot 5.x.x" section of the PDF contains more details about the requirements
 
-Then it's pretty simple to run a comparison.
+Then it's pretty simple to run a comparison. Refer to links to **tfidf_linearSVM_pdf_content.ipynb** and **comparison.ipynb** in the appendix for the code.
 
 ![Enhanced Content Comparison](./images/enhanced_content_comparison.png)
 
-We've reduced the false negative rate quite substantially. Yes, this means manually reviewing more bids but we've still cut that by 50% and are in a good place when it comes to false negatives.
+By enhancing the model we've reduced the number of missed opportunities by nearly a third. 
+
+This does mean manually reviewing more bids but we've still cut that by 50% and are in a good place when it comes to false negatives.  
 
 ## Conclusion
 
