@@ -48,6 +48,18 @@ module_2 repo
 * https://github.com/robertsweetman/module_2/blob/main/python/tfidf_linearSVM.ipynb
 * Final model selection and validation, using TF-IDF vectorization and linear SVM classifier
 
+## tfidf_linearSVM_pdf_content.ipynb
+* https://github.com/robertsweetman/module_2/blob/main/python/tfidf_linearSVM_pdf_content.ipynb
+* Adding more content from the tenders with PDF's to enhance the conclusion
+
+## comparison.ipynb
+* https://github.com/robertsweetman/module_2/blob/main/python/comparison.ipynb
+* Comparing the tfidf_linearSVM training with adding the PDF content
+
+## codes.txt
+* https://github.com/robertsweetman/module_2/blob/main/codes.txt
+* tender codes that we, as a consultancy are interested in.
+
 **Note 1**: postgres_dataload and pdf_processing Lambda functions were an attempt to use AWS Simple Queue Service (SQS) to asynchronously handle the 'pdf_processing' part of the data ingest pipeline. The idea being that we could add other POST(s) to the queue for a different lambda to process and keep the separation of concerns whereby one Lambda function executes one task. 
 
 However, running out of time this was abandoned as an approach as it wasn't possible to properly test whether ALL pdf_processing requests were being handled correctly when pulled from SQS. Ideally this would be the way to do things and should be the goal, with a bit more experience of queueing systems!

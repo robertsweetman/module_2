@@ -2,24 +2,26 @@
 
 ## Model Summary
 
-While we've gotten off to a good start, the high False Negative rates will still have a detrimental impact (missed bids) versus the savings from not having to read through all tenders.
+We made a good start trying to pick bid opportunites from the tender title only but this resulted in too many false negatives. 
 
-We need to spend more development time pulling in more data by deciding that all tenders without a PDF are reviewed manually. 
+We should manually review 25% of the tenders that don't have PDFs and add more context to the training process for the others by including the following additional data: 
 
-This leaves 75% of tenders with PDFs in the ML review pipeline but now offset by the fact that we should be able to increase the reliability becase we can add:-
+* Tender codes from the PDF - via One Hot Encoding
+  * We know, as a business, which tender codes we're interested in so there's a selection machanism here. (see appendix)
+* A count of the number of codes we find in a PDF
+* Additional amount of text from the PDF's
+  * The "Lot 5.x.x" section of the PDF contains more details about the requirements
 
-* Relevant Tender codes from the PDF - use One Hot Encoding for these
-* A count of the number of codes
-* Additional amounts of text from the PDF's
-  * Maybe only one section (summary, description etc.)
-  * Maybe just take the first page
+Then it's pretty simple to run a comparison.
 
-These steps would enrich the data and lead to much more reliable results. 
+![Enhanced Content Comparison](./images/enhanced_content_comparison.png)
 
-Since it's mainly a case of pulling this from our PostgreSQL db and running things again it wouldn't take a huge amount of development effort to add this. 
+We've reduced the false negative rate quite substantially. Yes, this means manually reviewing more bids but we've still cut that by 50% and are in a good place when it comes to false negatives.
 
-Sadly just using the tender title wasn't enough but we have a solid path forwards. 
+## Conclusion
 
-## Further Improvements and evaluation
+Recommend deploying this and re-running the training monthly to update it as new tenders are published.
+
+## Further Improvements and Ongoing Evaluation
 
 At some point an additional step would be to cross reference the bid/tenders database with "actual bids won" as well. This could add another layer to the entire exercise whereby it might also be possible to further increase the accuracy of our tender submission scanning and (with enough wins) possibly predict, based on past successes, whether a new tender is likely something we might win also.
