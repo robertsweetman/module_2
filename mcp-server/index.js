@@ -61,7 +61,7 @@ async function testConnection() {
     const client = await pool.connect();
     await client.query('SELECT NOW()');
     client.release();
-    console.log('✅ Database connection successful');
+    console.error('✅ Database connection successful');
   } catch (err) {
     console.error('❌ Database connection failed:', err);
     process.exit(1);
@@ -521,7 +521,7 @@ ${opportunities.map(opp => `
 // ==========================================
 
 async function main() {
-  console.log('🚀 Starting Irish Tenders MCP Server...');
+  console.error('🚀 Starting Irish Tenders MCP Server...');
   
   // Test database connection
   await testConnection();
@@ -529,31 +529,31 @@ async function main() {
   // Setup transport (stdio for Cursor integration)
   const transport = new StdioServerTransport();
   
-  console.log('📡 Connecting to MCP transport...');
+  console.error('📡 Connecting to MCP transport...');
   await server.connect(transport);
   
-  console.log('✅ Irish Tenders MCP Server is running!');
-  console.log('📊 Available tools:');
-  console.log('  - search_tenders: Search for tenders by keywords');
-  console.log('  - get_tender_details: Get complete tender information');
-  console.log('  - filter_tenders: Filter tenders by various criteria');
-  console.log('  - get_tender_statistics: Get database statistics');
-  console.log('  - analyze_opportunities: Analyze relevant business opportunities');
-  console.log('');
-  console.log('📁 Available resources:');
-  console.log('  - tender://{resource_id}: Individual tender records');
-  console.log('  - search://{query}: Search results');
+  console.error('✅ Irish Tenders MCP Server is running!');
+  console.error('📊 Available tools:');
+  console.error('  - search_tenders: Search for tenders by keywords');
+  console.error('  - get_tender_details: Get complete tender information');
+  console.error('  - filter_tenders: Filter tenders by various criteria');
+  console.error('  - get_tender_statistics: Get database statistics');
+  console.error('  - analyze_opportunities: Analyze relevant business opportunities');
+  console.error('');
+  console.error('📁 Available resources:');
+  console.error('  - tender://{resource_id}: Individual tender records');
+  console.error('  - search://{query}: Search results');
 }
 
 // Handle graceful shutdown
 process.on('SIGINT', async () => {
-  console.log('\n🛑 Shutting down gracefully...');
+  console.error('\n🛑 Shutting down gracefully...');
   await pool.end();
   process.exit(0);
 });
 
 process.on('SIGTERM', async () => {
-  console.log('\n🛑 Shutting down gracefully...');
+  console.error('\n🛑 Shutting down gracefully...');
   await pool.end();
   process.exit(0);
 });

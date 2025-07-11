@@ -12,7 +12,7 @@ npm start
 
 In the IDE MCP settings you need something like this also
 
-```
+```json
 {
   "mcpServers": {
     "irish-tenders": {
@@ -21,6 +21,21 @@ In the IDE MCP settings you need something like this also
       "cwd": "/mnt/c/Users/rober/GitHub/module_2/mcp-server"
     }
   }
+}
+```
+
+In VSCode (rather than something like Cursor) use because you need to tell the process to run inside WSL
+
+```json
+{
+	"servers": {
+		"irish-tenders": {
+			"command": "wsl",
+			"args": ["node", "index.js"],
+			"cwd": "C:\\Users\\rober\\GitHub\\module_2\\mcp-server"
+		}
+	},
+	"inputs": []
 }
 ```
 
