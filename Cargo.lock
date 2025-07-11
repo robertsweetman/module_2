@@ -2703,9 +2703,12 @@ version = "0.1.0"
 dependencies = [
  "aws-config",
  "aws-sdk-sqs",
+ "bigdecimal",
+ "chrono",
  "lambda_runtime",
  "native-tls",
  "openssl",
+ "regex",
  "reqwest",
  "scraper",
  "serde",
