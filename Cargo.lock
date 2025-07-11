@@ -563,11 +563,11 @@ dependencies = [
 
 [[package]]
 name = "aws_lambda_events"
-version = "0.13.1"
+version = "0.16.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d5af275f3e5801892c4295a919c5edbe8d24134f91458269a77a2da12622c123"
+checksum = "144ec7565561115498a288850cc6a42b279e09b6c4b88f623eecb9c8ca96c08c"
 dependencies = [
- "base64 0.21.7",
+ "base64 0.22.1",
  "bytes",
  "chrono",
  "flate2",
@@ -2545,11 +2545,9 @@ dependencies = [
  "aws-sdk-sqs",
  "aws_lambda_events",
  "lambda_runtime",
- "once_cell",
  "openssl",
  "pdf-extract",
  "reqwest",
- "scraper",
  "serde",
  "serde_json",
  "sqlx",
