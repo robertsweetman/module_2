@@ -72,7 +72,20 @@ async fn function_handler(event: LambdaEvent<SqsEvent>) -> Result<Response, Erro
         }
     };
     
-    println!("Fresh container processing PDF for resource_id: {}", resource_id);
+    // Parse resource_id as i64 to match database schema
+    let resource_id_int: i64 = match resource_id.parse() {
+        Ok(id) => id,
+        Err(e) => {
+            return Ok(Response {
+                resource_id,
+                success: false,
+                message: format!("Invalid resource_id format: {}", e),
+                text_length: None,
+            });
+        }
+    };
+    
+    println!("Fresh container processing PDF for resource_id: {}", resource_id_int);
 
     if pdf_url.is_empty() {
         return Ok(Response {
@@ -185,7 +198,7 @@ async fn function_handler(event: LambdaEvent<SqsEvent>) -> Result<Response, Erro
     
     // Store in pdf_content table
     println!("Storing PDF content in database");
-    match store_pdf_content_with_codes(&db_pool, &resource_id, &pdf_text, &detected_codes).await {
+    match store_pdf_content_with_codes(&db_pool, resource_id_int, &pdf_text, &detected_codes).await {
         Ok(_) => {
             println!("Successfully stored PDF content");
             let _ = db_pool.close().await;
@@ -236,7 +249,7 @@ async fn ensure_table_exists(pool: &Pool<Postgres>) -> Result<(), Box<dyn std::e
     sqlx::query(
         r#"
         CREATE TABLE IF NOT EXISTS pdf_content (
-            resource_id TEXT PRIMARY KEY,
+            resource_id BIGINT PRIMARY KEY,
             pdf_text TEXT NOT NULL,
             extraction_timestamp TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
             processing_status TEXT NOT NULL,
@@ -254,7 +267,7 @@ async fn ensure_table_exists(pool: &Pool<Postgres>) -> Result<(), Box<dyn std::e
 
 async fn store_pdf_content_with_codes(
     pool: &Pool<Postgres>, 
-    resource_id: &str, 
+    resource_id: i64, 
     pdf_text: &str,
     detected_codes: &[String]
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
