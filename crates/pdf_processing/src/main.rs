@@ -9,6 +9,7 @@ use aws_lambda_events::event::sqs::SqsEvent;
 use serde_json;
 use aws_config;
 use aws_sdk_sqs::Client as SqsClient;
+use aws_sdk_s3::Client as S3Client;
 
 // Import the function from the lib.rs file
 use pdf_processing::{extract_codes, extract_text_from_pdf};
@@ -146,17 +147,23 @@ async fn function_handler(event: LambdaEvent<SqsEvent>) -> Result<Response, Erro
         }
     };
     
-    // Load codes from file
-    println!("Loading codes from file");
-    let codes_text = fs::read_to_string("codes.txt").unwrap_or_default();
-    let codes: Vec<String> = codes_text
-        .lines()
-        .filter_map(|line| line.split(',').next())
-        .map(|code| code.trim().to_string())
-        .filter(|code| !code.is_empty())
-        .collect();
-    
-    println!("Loaded {} codes", codes.len());
+    // Load codes from embedded content (instead of file system)
+    println!("Loading codes from S3");
+    let codes = match load_codes_from_s3().await {
+        Ok(codes) => {
+            println!("Loaded {} codes from S3", codes.len());
+            codes
+        },
+        Err(e) => {
+            let _ = db_pool.close().await;
+            return Ok(Response {
+                resource_id,
+                success: false,
+                message: format!("Failed to load codes from S3: {}", e),
+                text_length: Some(pdf_text.len()),
+            });
+        }
+    };
     
     // Detect codes in the PDF text
     let detected_codes = extract_codes(&pdf_text, &codes);
@@ -273,6 +280,36 @@ async fn store_pdf_content_with_codes(
     .await?;
     
     Ok(())
+}
+
+async fn load_codes_from_s3() -> Result<Vec<String>, Box<dyn std::error::Error + Send + Sync>> {
+    let config = aws_config::defaults(aws_config::BehaviorVersion::latest()).load().await;
+    let s3_client = S3Client::new(&config);
+    
+    // Get S3 bucket and key from environment variables
+    let bucket = env::var("LAMBDA_BUCKET").map_err(|_| "LAMBDA_BUCKET environment variable not set")?;
+    let key = "codes.txt";
+    
+    println!("Fetching codes from s3://{}/{}", bucket, key);
+    
+    let response = s3_client
+        .get_object()
+        .bucket(bucket)
+        .key(key)
+        .send()
+        .await?;
+    
+    let body = response.body.collect().await?;
+    let codes_text = String::from_utf8(body.into_bytes().to_vec())?;
+    
+    let codes: Vec<String> = codes_text
+        .lines()
+        .filter_map(|line| line.split(',').next())
+        .map(|code| code.trim().to_string())
+        .filter(|code| !code.is_empty())
+        .collect();
+    
+    Ok(codes)
 }
 
 #[tokio::main]
