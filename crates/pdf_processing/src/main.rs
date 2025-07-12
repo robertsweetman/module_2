@@ -105,7 +105,21 @@ async fn function_handler(event: LambdaEvent<SqsEvent>) -> Result<Response, Erro
 
     // Create fresh database pool for each invocation
     println!("Creating database connection");
-    let db_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+    let db_url = match env::var("DATABASE_URL") {
+        Ok(url) => {
+            println!("DATABASE_URL found, length: {}", url.len());
+            url
+        },
+        Err(e) => {
+            println!("ERROR: DATABASE_URL not found: {:?}", e);
+            return Ok(Response {
+                resource_id,
+                success: false,
+                message: format!("DATABASE_URL environment variable not set: {:?}", e),
+                text_length: None,
+            });
+        }
+    };
     let db_pool = PgPoolOptions::new()
         .max_connections(1)
         .acquire_timeout(Duration::from_secs(5))
@@ -296,11 +310,21 @@ async fn store_pdf_content_with_codes(
 }
 
 async fn load_codes_from_s3() -> Result<Vec<String>, Box<dyn std::error::Error + Send + Sync>> {
+    println!("Initializing AWS config for S3");
     let config = aws_config::defaults(aws_config::BehaviorVersion::latest()).load().await;
     let s3_client = S3Client::new(&config);
     
     // Get S3 bucket and key from environment variables
-    let bucket = env::var("LAMBDA_BUCKET").map_err(|_| "LAMBDA_BUCKET environment variable not set")?;
+    let bucket = match env::var("LAMBDA_BUCKET") {
+        Ok(b) => {
+            println!("LAMBDA_BUCKET found: {}", b);
+            b
+        },
+        Err(e) => {
+            println!("ERROR: LAMBDA_BUCKET not found: {:?}", e);
+            return Err("LAMBDA_BUCKET environment variable not set".into());
+        }
+    };
     let key = "codes.txt";
     
     println!("Fetching codes from s3://{}/{}", bucket, key);
@@ -327,6 +351,14 @@ async fn load_codes_from_s3() -> Result<Vec<String>, Box<dyn std::error::Error +
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
-    println!("Lambda starting up");
+    println!("=== Lambda starting up ===");
+    println!("Rust backtrace level: {:?}", env::var("RUST_BACKTRACE"));
+    println!("Available environment variables:");
+    for (key, value) in env::vars() {
+        if key.contains("DATABASE") || key.contains("LAMBDA") || key.contains("QUEUE") {
+            println!("  {}: {}", key, value);
+        }
+    }
+    println!("=== Starting lambda runtime ===");
     run(service_fn(function_handler)).await
 }

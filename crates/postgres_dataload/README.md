@@ -23,7 +23,7 @@ Running the postgres_dataload function in AWS Lambda
 ```json
 {
   "start_page": 1,
-  "max_pages": 53,
+  "max_pages": 5,
   "test_mode": false
 }
 ```
