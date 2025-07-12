@@ -3,7 +3,6 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use sqlx::{postgres::PgPoolOptions, Pool, Postgres};
 use std::env;
-use std::fs;
 use std::time::Duration;
 use aws_lambda_events::event::sqs::SqsEvent;
 use serde_json;
@@ -121,7 +120,7 @@ async fn function_handler(event: LambdaEvent<SqsEvent>) -> Result<Response, Erro
         Err(e) => {
             println!("ERROR: DATABASE_URL not found: {:?}", e);
             return Ok(Response {
-                resource_id,
+                resource_id: resource_id.to_string(),
                 success: false,
                 message: format!("DATABASE_URL environment variable not set: {:?}", e),
                 text_length: None,
