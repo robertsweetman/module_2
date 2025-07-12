@@ -244,19 +244,16 @@ async fn function_handler(event: LambdaEvent<SqsEvent>) -> Result<Response, Erro
             }
 
             // Build success response
-            let _response = Response {
+            let response = Response {
                 resource_id: resource_id.to_string(),
                 success: true,
                 message: "Successfully processed PDF".to_string(),
                 text_length: Some(pdf_text.len()),
             };
 
-            // Flush stdout then terminate the process with a success code.
-            use std::io::Write;
-            let _ = std::io::stdout().flush();
-            std::process::exit(0);
-            #[allow(unreachable_code)]
-            Ok(_response)
+            // Return success normally instead of exiting
+            println!("Lambda completed successfully, returning response");
+            Ok(response)
         },
         Err(e) => {
             println!("CRITICAL ERROR: Failed to store PDF content for resource_id {}: {}", resource_id_int, e);
