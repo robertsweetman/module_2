@@ -109,7 +109,6 @@ resource "aws_lambda_function" "ml_bid_predictor" {
       DATABASE_URL = "postgres://${var.db_admin_name}:${var.db_admin_pwd}@${aws_db_instance.postgres.endpoint}/${var.db_name}"
       AI_SUMMARY_QUEUE_URL = aws_sqs_queue.ai_summary_queue.url
       SNS_TOPIC_ARN = aws_sns_topic.ml_predictions.arn
-      AWS_REGION = var.aws_region
       MODEL_VERSION = "v1.0"
       PREDICTION_THRESHOLD = "0.5"
       BATCH_SIZE = "100"
