@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       lambda:
-        description: "Lambda to build/deploy (all | postgres_dataload | pdf_processing | get_data)"
+        description: "Lambda to build/deploy (all | postgres_dataload | pdf_processing | get_data | ml_bid_predictor)"
         required: true
         default: "all"
         type: choice
@@ -17,6 +17,7 @@ on:
           - postgres_dataload
           - pdf_processing
           - get_data
+          - ml_bid_predictor
 
 env:
   LAMBDA_BUCKET: ${{ secrets.LAMBDA_BUCKET_NAME }}  # Set this as a GitHub secret
@@ -66,6 +67,11 @@ jobs:
         run: |
           cargo lambda build --release --target x86_64-unknown-linux-musl --package get_data
 
+      - name: Build ML Bid Predictor Lambda
+        if: ${{ inputs.lambda == 'all' || inputs.lambda == 'ml_bid_predictor' }}
+        run: |
+          cargo lambda build --release --target x86_64-unknown-linux-musl --package ml_bid_predictor
+
       - name: Package Postgres Dataload Lambda
         if: ${{ inputs.lambda == 'all' || inputs.lambda == 'postgres_dataload' }}
         run: |
@@ -85,6 +91,13 @@ jobs:
         run: |
           cp ./target/lambda/get_data/bootstrap ./bootstrap
           zip get_data.zip bootstrap
+          rm bootstrap
+
+      - name: Package ML Bid Predictor Lambda
+        if: ${{ inputs.lambda == 'all' || inputs.lambda == 'ml_bid_predictor' }}
+        run: |
+          cp ./target/lambda/ml_bid_predictor/bootstrap ./bootstrap
+          zip ml_bid_predictor.zip bootstrap
           rm bootstrap
 
       - name: Debug - List contents before upload
@@ -107,7 +120,7 @@ jobs:
           fi
 
       - name: Upload to S3
-        if: ${{ inputs.lambda == 'all' || inputs.lambda == 'postgres_dataload' || inputs.lambda == 'pdf_processing' || inputs.lambda == 'get_data' }}
+        if: ${{ inputs.lambda == 'all' || inputs.lambda == 'postgres_dataload' || inputs.lambda == 'pdf_processing' || inputs.lambda == 'get_data' || inputs.lambda == 'ml_bid_predictor' }}
         run: |
           if [[ "${{ inputs.lambda }}" == "postgres_dataload" || "${{ inputs.lambda }}" == "all" ]]; then
             aws s3 cp postgres_dataload.zip s3://$LAMBDA_BUCKET/postgres_dataload.zip
@@ -117,6 +130,9 @@ jobs:
           fi
           if [[ "${{ inputs.lambda }}" == "get_data" || "${{ inputs.lambda }}" == "all" ]]; then
             aws s3 cp get_data.zip s3://$LAMBDA_BUCKET/get_data.zip
+          fi
+          if [[ "${{ inputs.lambda }}" == "ml_bid_predictor" || "${{ inputs.lambda }}" == "all" ]]; then
+            aws s3 cp ml_bid_predictor.zip s3://$LAMBDA_BUCKET/ml_bid_predictor.zip
           fi
 
       - name: Update Lambda Functions
@@ -130,6 +146,9 @@ jobs:
           fi
           if [[ "${{ inputs.lambda }}" == "get_data" || "${{ inputs.lambda }}" == "all" ]]; then
             aws lambda update-function-code --function-name get_data --s3-bucket $LAMBDA_BUCKET --s3-key get_data.zip
+          fi
+          if [[ "${{ inputs.lambda }}" == "ml_bid_predictor" || "${{ inputs.lambda }}" == "all" ]]; then
+            aws lambda update-function-code --function-name ml_bid_predictor --s3-bucket $LAMBDA_BUCKET --s3-key ml_bid_predictor.zip
           fi
 
       - name: Wait for Postgres Dataload Update
@@ -146,3 +165,8 @@ jobs:
         if: ${{ inputs.lambda == 'all' || inputs.lambda == 'get_data' }}
         run: |
           aws lambda wait function-updated --function-name get_data
+      
+      - name: Wait for ML Bid Predictor Update
+        if: ${{ inputs.lambda == 'all' || inputs.lambda == 'ml_bid_predictor' }}
+        run: |
+          aws lambda wait function-updated --function-name ml_bid_predictor

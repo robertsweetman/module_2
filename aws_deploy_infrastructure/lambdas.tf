@@ -52,6 +52,7 @@ resource "aws_lambda_function" "postgres_dataload" {
       RUST_BACKTRACE  = "1"
       DATABASE_URL = "postgres://${var.db_admin_name}:${var.db_admin_pwd}@${aws_db_instance.postgres.endpoint}/${var.db_name}"
       PDF_PROCESSING_QUEUE_URL = aws_sqs_queue.pdf_processing_queue.url
+      ML_PREDICTION_QUEUE_URL = aws_sqs_queue.ml_prediction_queue.url
     }
   }
 
@@ -86,4 +87,39 @@ resource "aws_lambda_function" "get_data" {
 
   timeout = 900
   memory_size = 1024
+}
+
+resource "aws_lambda_function" "ml_bid_predictor" {
+  function_name = "ml_bid_predictor"
+  handler       = "bootstrap"
+  runtime       = "provided.al2"
+  role          = aws_iam_role.lambda_role.arn
+  
+  s3_bucket     = aws_s3_bucket.lambda_bucket.id
+  s3_key        = "ml_bid_predictor.zip"
+
+  depends_on = [aws_s3_bucket.lambda_bucket]
+  lifecycle {
+    ignore_changes = [source_code_hash]
+  }
+  
+  environment {
+    variables = {
+      RUST_BACKTRACE = "1"
+      DATABASE_URL = "postgres://${var.db_admin_name}:${var.db_admin_pwd}@${aws_db_instance.postgres.endpoint}/${var.db_name}"
+      MODEL_VERSION = "v1.0"
+      PREDICTION_THRESHOLD = "0.5"
+      BATCH_SIZE = "100"
+      MAX_PDF_TEXT_LENGTH = "50000"
+      MIN_PDF_TEXT_LENGTH = "50"
+    }
+  }
+  
+  vpc_config {
+    subnet_ids         = data.aws_subnets.default.ids
+    security_group_ids = [aws_security_group.lambda_sg.id]
+  }
+
+  timeout = 600  # 10 minutes for ML processing
+  memory_size = 1024  # More memory for ML computations
 }

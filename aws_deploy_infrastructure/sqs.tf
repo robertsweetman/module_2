@@ -54,7 +54,9 @@ resource "aws_iam_policy" "lambda_sqs_policy" {
         ]
         Resource = [
           aws_sqs_queue.pdf_processing_queue.arn,
-          aws_sqs_queue.pdf_processing_dlq.arn
+          aws_sqs_queue.pdf_processing_dlq.arn,
+          aws_sqs_queue.ml_prediction_queue.arn,
+          aws_sqs_queue.ml_prediction_dlq.arn
         ]
       }
     ]
@@ -80,7 +82,10 @@ resource "aws_iam_policy" "postgres_dataload_sqs_policy" {
           "sqs:SendMessage",
           "sqs:GetQueueUrl"
         ]
-        Resource = aws_sqs_queue.pdf_processing_queue.arn
+        Resource = [
+          aws_sqs_queue.pdf_processing_queue.arn,
+          aws_sqs_queue.ml_prediction_queue.arn
+        ]
       }
     ]
   })
@@ -90,5 +95,45 @@ resource "aws_iam_policy" "postgres_dataload_sqs_policy" {
 resource "aws_iam_role_policy_attachment" "postgres_dataload_sqs_policy_attachment" {
   policy_arn = aws_iam_policy.postgres_dataload_sqs_policy.arn
   role       = aws_iam_role.lambda_role.name
+}
+
+# SQS Queue for ML prediction triggers
+resource "aws_sqs_queue" "ml_prediction_queue" {
+  name                      = "ml-prediction-queue"
+  visibility_timeout_seconds = 600  # 10 minutes (longer than ML Lambda timeout)
+  message_retention_seconds = 1209600  # 14 days
+  receive_wait_time_seconds = 20  # Long polling
+  
+  redrive_policy = jsonencode({
+    deadLetterTargetArn = aws_sqs_queue.ml_prediction_dlq.arn
+    maxReceiveCount     = 3  # Retry twice before moving to DLQ
+  })
+
+  tags = {
+    Name = "ML Prediction Queue"
+  }
+}
+
+# Dead Letter Queue for failed ML prediction messages
+resource "aws_sqs_queue" "ml_prediction_dlq" {
+  name                      = "ml-prediction-dlq"
+  message_retention_seconds = 1209600  # 14 days
+
+  tags = {
+    Name = "ML Prediction Dead Letter Queue"
+  }
+}
+
+# Lambda trigger from ML prediction SQS
+resource "aws_lambda_event_source_mapping" "ml_prediction_sqs_trigger" {
+  event_source_arn = aws_sqs_queue.ml_prediction_queue.arn
+  function_name    = aws_lambda_function.ml_bid_predictor.function_name
+  
+  batch_size       = 1  # Process one trigger at a time
+  maximum_batching_window_in_seconds = 0
+  
+  scaling_config {
+    maximum_concurrency = 5  # Limit ML processing concurrency
+  }
 }
 
