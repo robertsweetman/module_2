@@ -41,3 +41,9 @@ variable "db_credentials_initial_secret_string" {
 }
 EOF
 }
+
+variable "notification_emails" {
+  description = "List of email addresses to receive ML prediction notifications"
+  type        = list(string)
+  default     = []
+}

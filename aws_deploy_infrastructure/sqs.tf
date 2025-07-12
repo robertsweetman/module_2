@@ -56,7 +56,11 @@ resource "aws_iam_policy" "lambda_sqs_policy" {
           aws_sqs_queue.pdf_processing_queue.arn,
           aws_sqs_queue.pdf_processing_dlq.arn,
           aws_sqs_queue.ml_prediction_queue.arn,
-          aws_sqs_queue.ml_prediction_dlq.arn
+          aws_sqs_queue.ml_prediction_dlq.arn,
+          aws_sqs_queue.ai_summary_queue.arn,
+          aws_sqs_queue.ai_summary_dlq.arn,
+          aws_sqs_queue.sns_queue.arn,
+          aws_sqs_queue.sns_dlq.arn
         ]
       }
     ]
@@ -84,7 +88,9 @@ resource "aws_iam_policy" "postgres_dataload_sqs_policy" {
         ]
         Resource = [
           aws_sqs_queue.pdf_processing_queue.arn,
-          aws_sqs_queue.ml_prediction_queue.arn
+          aws_sqs_queue.ml_prediction_queue.arn,
+          aws_sqs_queue.ai_summary_queue.arn,
+          aws_sqs_queue.sns_queue.arn
         ]
       }
     ]
@@ -134,6 +140,60 @@ resource "aws_lambda_event_source_mapping" "ml_prediction_sqs_trigger" {
   
   scaling_config {
     maximum_concurrency = 5  # Limit ML processing concurrency
+  }
+}
+
+# SQS Queue for AI Summary processing
+resource "aws_sqs_queue" "ai_summary_queue" {
+  name                      = "ai-summary-queue"
+  visibility_timeout_seconds = 300  # 5 minutes
+  message_retention_seconds = 1209600  # 14 days
+  receive_wait_time_seconds = 20  # Long polling
+  
+  redrive_policy = jsonencode({
+    deadLetterTargetArn = aws_sqs_queue.ai_summary_dlq.arn
+    maxReceiveCount     = 3
+  })
+
+  tags = {
+    Name = "AI Summary Queue"
+  }
+}
+
+# Dead Letter Queue for failed AI summary messages
+resource "aws_sqs_queue" "ai_summary_dlq" {
+  name                      = "ai-summary-dlq"
+  message_retention_seconds = 1209600  # 14 days
+
+  tags = {
+    Name = "AI Summary Dead Letter Queue"
+  }
+}
+
+# SQS Queue for SNS notifications
+resource "aws_sqs_queue" "sns_queue" {
+  name                      = "sns-notification-queue"
+  visibility_timeout_seconds = 60  # 1 minute
+  message_retention_seconds = 1209600  # 14 days
+  receive_wait_time_seconds = 20  # Long polling
+  
+  redrive_policy = jsonencode({
+    deadLetterTargetArn = aws_sqs_queue.sns_dlq.arn
+    maxReceiveCount     = 3
+  })
+
+  tags = {
+    Name = "SNS Notification Queue"
+  }
+}
+
+# Dead Letter Queue for failed SNS messages
+resource "aws_sqs_queue" "sns_dlq" {
+  name                      = "sns-notification-dlq"
+  message_retention_seconds = 1209600  # 14 days
+
+  tags = {
+    Name = "SNS Notification Dead Letter Queue"
   }
 }
 

@@ -16,6 +16,9 @@ smartcore = "0.3.2"  # Pure Rust ML library
 nalgebra = "0.33.0"  # Linear algebra for feature vectors
 regex = "1.10.0"     # Text processing
 
+# Database
+sqlx = { version = "0.8.6", features = ["postgres", "runtime-tokio-native-tls", "chrono", "bigdecimal"] }
+
 # Serialization and async
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"

@@ -58,3 +58,25 @@ resource "aws_iam_role_policy" "lambda_s3_access" {
         ]
     })
 }
+
+# SNS publishing policy for ML prediction notifications
+resource "aws_iam_role_policy" "lambda_sns_access" {
+  name = "lambda_sns_access"
+  role = aws_iam_role.lambda_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "sns:Publish",
+          "sns:Subscribe",
+          "sns:Unsubscribe",
+          "sns:GetTopicAttributes"
+        ]
+        Resource = aws_sns_topic.ml_predictions.arn
+      }
+    ]
+  })
+}

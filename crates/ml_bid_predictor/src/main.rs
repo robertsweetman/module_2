@@ -7,7 +7,9 @@ mod ml_predictor;
 mod features;
 mod queue_handler;
 mod types;
+mod database;
 
+use database::Database;
 use queue_handler::QueueHandler;
 use ml_predictor::OptimizedBidPredictor;
 use types::TenderRecord;
@@ -18,15 +20,16 @@ async fn function_handler(event: LambdaEvent<SqsEvent>) -> Result<Value, Error> 
     
     info!("Processing {} SQS records", event.records.len());
     
-    // Initialize predictor and queue handler
+    // Initialize predictor, queue handler, and database
     let predictor = OptimizedBidPredictor::new();
     let queue_handler = QueueHandler::new().await?;
+    let database = Database::new().await?;
     
     let mut processed_count = 0;
     let mut error_count = 0;
     
     for record in &event.records {
-        match process_tender_record(&predictor, &queue_handler, record).await {
+        match process_tender_record(&predictor, &queue_handler, &database, record).await {
             Ok(_) => {
                 processed_count += 1;
                 info!("Successfully processed record {}", processed_count);
@@ -51,10 +54,10 @@ async fn function_handler(event: LambdaEvent<SqsEvent>) -> Result<Value, Error> 
 }
 
 /// Process individual tender record
-/// Process individual tender record
 async fn process_tender_record(
     predictor: &OptimizedBidPredictor,
     queue_handler: &QueueHandler,
+    database: &Database,
     record: &impl serde::ser::Serialize,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     // Parse tender record from SQS message body
@@ -77,12 +80,30 @@ async fn process_tender_record(
             info!("🎯 RECOMMENDATION: BID (confidence: {:.3}, threshold: 0.050)", 
                   prediction.confidence);
             
+            // Update database with prediction results and set status to 'bid'
+            database.update_ml_prediction_results(
+                &tender_record.resource_id,
+                true,
+                prediction.confidence,
+                &prediction.reasoning,
+                "bid"
+            ).await?;
+            
             // Send to AI summary queue for further analysis (also sends SNS notification)
             queue_handler.send_to_ai_summary_queue(&tender_record, &prediction).await?;
         }
         false => {
             info!("⏭️  RECOMMENDATION: SKIP (confidence: {:.3}, threshold: 0.050)", 
                   prediction.confidence);
+            
+            // Update database with prediction results and set status to 'no-bid'
+            database.update_ml_prediction_results(
+                &tender_record.resource_id,
+                false,
+                prediction.confidence,
+                &prediction.reasoning,
+                "no-bid"
+            ).await?;
             
             // Just log for monitoring - no queue/notification needed for skips
         }

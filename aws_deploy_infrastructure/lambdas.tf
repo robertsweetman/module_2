@@ -107,17 +107,15 @@ resource "aws_lambda_function" "ml_bid_predictor" {
     variables = {
       RUST_BACKTRACE = "1"
       DATABASE_URL = "postgres://${var.db_admin_name}:${var.db_admin_pwd}@${aws_db_instance.postgres.endpoint}/${var.db_name}"
+      AI_SUMMARY_QUEUE_URL = aws_sqs_queue.ai_summary_queue.url
+      SNS_TOPIC_ARN = aws_sns_topic.ml_predictions.arn
+      AWS_REGION = var.aws_region
       MODEL_VERSION = "v1.0"
       PREDICTION_THRESHOLD = "0.5"
       BATCH_SIZE = "100"
       MAX_PDF_TEXT_LENGTH = "50000"
       MIN_PDF_TEXT_LENGTH = "50"
     }
-  }
-  
-  vpc_config {
-    subnet_ids         = data.aws_subnets.default.ids
-    security_group_ids = [aws_security_group.lambda_sg.id]
   }
 
   timeout = 600  # 10 minutes for ML processing
