@@ -32,12 +32,18 @@ struct Response {
 }
 
 async fn function_handler(event: LambdaEvent<SqsEvent>) -> Result<Response, Error> {
+    println!("=== FUNCTION HANDLER STARTED ===");
+    println!("Event received, processing SQS records...");
+    
     // Check if this container has been used before
     // Removed: Unused after redesign
     
     // Expect exactly one record per invocation (batch_size = 1)
     let sqs_records = &event.payload.records;
+    println!("Number of SQS records: {}", sqs_records.len());
+    
     if sqs_records.is_empty() {
+        println!("No SQS records found in event");
         return Ok(Response {
             resource_id: String::new(),
             success: false,
@@ -47,9 +53,15 @@ async fn function_handler(event: LambdaEvent<SqsEvent>) -> Result<Response, Erro
     }
 
     let sqs_message = &sqs_records[0];
+    println!("Processing SQS message, checking body...");
     let body_str = match &sqs_message.body {
-        Some(b) => b,
+        Some(b) => {
+            println!("SQS message body found, length: {}", b.len());
+            println!("Message body preview: {}", &b[..b.len().min(100)]);
+            b
+        },
         None => {
+            println!("ERROR: SQS message body is None");
             return Ok(Response {
                 resource_id: String::new(),
                 success: false,
@@ -59,10 +71,16 @@ async fn function_handler(event: LambdaEvent<SqsEvent>) -> Result<Response, Erro
         }
     };
 
+    println!("Attempting to parse JSON from SQS message body...");
     // Deserialize the message body into our request struct
     let PdfProcessingRequest { resource_id, pdf_url } = match serde_json::from_str::<PdfProcessingRequest>(body_str) {
-        Ok(req) => req,
+        Ok(req) => {
+            println!("Successfully parsed JSON: resource_id={}, pdf_url={}", req.resource_id, req.pdf_url);
+            req
+        },
         Err(e) => {
+            println!("ERROR: Failed to parse JSON: {:?}", e);
+            println!("Raw message body: {}", body_str);
             return Ok(Response {
                 resource_id: String::new(),
                 success: false,
