@@ -25,6 +25,7 @@ resource "aws_lambda_function" "pdf_processing" {
       RUST_BACKTRACE = "full"
       DATABASE_URL = "postgres://${var.db_admin_name}:${var.db_admin_pwd}@${aws_db_instance.postgres.endpoint}/${var.db_name}"
       LAMBDA_BUCKET = aws_s3_bucket.lambda_bucket.id
+      PDF_PROCESSING_QUEUE_URL = aws_sqs_queue.pdf_processing_queue.url
     }
   }
 
