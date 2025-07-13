@@ -78,6 +78,19 @@ pub struct AISummaryResult {
     pub created_at: DateTime<Utc>,
 }
 
+/// SNS message structure for notifications
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SNSMessage {
+    pub message_type: String,       // "AI_SUMMARY_COMPLETE"
+    pub resource_id: String,
+    pub title: String,
+    pub priority: String,           // "HIGH", "URGENT", "LOW"
+    pub summary: String,
+    pub action_required: String,
+    pub timestamp: DateTime<Utc>,
+    pub metadata: serde_json::Value,
+}
+
 /// Configuration from environment
 #[derive(Debug, Clone)]
 pub struct Config {

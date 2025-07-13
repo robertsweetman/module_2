@@ -2,13 +2,49 @@
 
 This lambda processes messages from the `ai_summary_queue` and generates comprehensive AI summaries of tender opportunities using OpenAI's GPT-4 API.
 
-## Architecture
+## Processing Flow
 
-The AI Summary lambda is the final stage in the tender processing pipeline:
+1. **Receive SQS Message**: Gets `AISummaryMessage` from ai_summary_queue
+2. **Strategy Selection**: Choose title-only or full PDF processing
+3. **Database Fetch**: Get complete tender record and PDF content if needed  
+4. **AI Processing**: Generate summary using OpenAI GPT-4
+5. **Store Results**: Save summary to `ai_summaries` table
+6. **Send Notification**: Publish completion notification to SNS topic
 
-```
-postgres_dataload → pdf_processing → ml_bid_predictor → ai_summary
-```
+## Notifications
+
+After successfully completing an AI summary, the lambda sends an SNS notification with:
+
+- **Priority levels**:
+  - `URGENT`: ML recommends bidding
+  - `HIGH`: Full PDF analysis completed (no bid recommendation)
+  - `NORMAL`: Title-only analysis completed
+
+- **Notification content**:
+  - Truncated summary (500 chars max)
+  - Key metadata (value, deadline, contracting authority)
+  - ML prediction results
+  - Action required based on priority
+
+- **SNS Message Structure**:
+  ```json
+  {
+    "message_type": "AI_SUMMARY_COMPLETE",
+    "resource_id": "12345",
+    "title": "Software Development Services",
+    "priority": "URGENT",
+    "summary": "Truncated AI summary...",
+    "action_required": "REVIEW IMMEDIATELY: ML recommends bidding",
+    "timestamp": "2025-07-13T10:30:00Z",
+    "metadata": {
+      "contracting_authority": "Health Service Executive",
+      "ml_prediction": {...},
+      "key_points": [...],
+      "recommendation": "...",
+      // Additional context
+    }
+  }
+  ```
 
 ## Processing Strategy
 

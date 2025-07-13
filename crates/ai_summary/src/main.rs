@@ -8,10 +8,12 @@ use anyhow::Result;
 mod types;
 mod database;
 mod ai_service;
+mod notification_service;
 
 use types::{AISummaryMessage, Config};
 use database::Database;
 use ai_service::AIService;
+use notification_service::NotificationService;
 
 async fn function_handler(event: LambdaEvent<SqsEvent>) -> Result<String, Error> {
     info!("=== AI SUMMARY LAMBDA STARTED ===");
@@ -30,13 +32,18 @@ async fn function_handler(event: LambdaEvent<SqsEvent>) -> Result<String, Error>
     
     let ai_service = AIService::new(config.openai_api_key.clone());
     
+    let notification_service = NotificationService::new(&config).await.map_err(|e| {
+        error!("Failed to initialize notification service: {}", e);
+        Error::from(e.to_string().as_str())
+    })?;
+    
     // Process SQS records
     let sqs_records = &event.payload.records;
     info!("Processing {} SQS records", sqs_records.len());
     
     for record in sqs_records {
         if let Some(body) = &record.body {
-            match process_summary_message(body, &database, &ai_service).await {
+            match process_summary_message(body, &database, &ai_service, &notification_service).await {
                 Ok(_) => info!("✅ Successfully processed message"),
                 Err(e) => {
                     error!("❌ Failed to process message: {}", e);
@@ -55,6 +62,7 @@ async fn process_summary_message(
     message_body: &str,
     database: &Database,
     ai_service: &AIService,
+    notification_service: &NotificationService,
 ) -> Result<()> {
     info!("🔄 Processing AI summary message");
     
@@ -65,13 +73,13 @@ async fn process_summary_message(
     info!("📋 Processing summary for resource_id: {}, priority: {}", 
           resource_id, ai_message.priority);
     
+    // Get tender record for context (needed for both processing paths and notification)
+    let tender = database.get_tender_record(resource_id).await?
+        .ok_or_else(|| anyhow::anyhow!("Tender record not found for resource_id: {}", resource_id))?;
+    
     // Determine processing strategy based on available content
     let summary_result = if ai_message.pdf_content.is_empty() || ai_message.pdf_content.len() < 100 {
         info!("📝 Using title-only processing (no/minimal PDF content)");
-        
-        // Get tender record for additional context
-        let tender = database.get_tender_record(resource_id).await?
-            .ok_or_else(|| anyhow::anyhow!("Tender record not found for resource_id: {}", resource_id))?;
         
         ai_service.generate_title_summary(
             &tender.title,
@@ -101,10 +109,6 @@ async fn process_summary_message(
                 .ok_or_else(|| anyhow::anyhow!("No PDF content found in database for resource_id: {}", resource_id))?
         };
         
-        // Get complete tender record
-        let tender = database.get_tender_record(resource_id).await?
-            .ok_or_else(|| anyhow::anyhow!("Tender record not found for resource_id: {}", resource_id))?;
-        
         info!("📊 Using full PDF processing (PDF text length: {})", pdf_content.pdf_text.len());
         ai_service.generate_full_summary(&tender, &pdf_content, &ai_message.ml_prediction).await?
     };
@@ -114,6 +118,13 @@ async fn process_summary_message(
     
     info!("✅ AI summary completed for resource_id: {} (type: {})", 
           resource_id, summary_result.summary_type);
+    
+    // Send notification about completed AI summary
+    notification_service.send_summary_complete_notification(
+        &tender,
+        &summary_result,
+        &ai_message.ml_prediction,
+    ).await?;
     
     // Log summary for monitoring
     info!("📋 Summary preview: {}", 
