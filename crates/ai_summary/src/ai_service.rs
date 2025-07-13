@@ -2,21 +2,20 @@ use crate::types::{AISummaryResult, MLPredictionResult, TenderRecord, PdfContent
 use anyhow::Result;
 use tracing::{info, debug, warn};
 use chrono::Utc;
-use reqwest::Client;
 use serde_json::{json, Value};
+use anthropic_sdk;
+use std::sync::{Arc, Mutex};
 
-/// AI service for generating summaries using OpenAI
+/// AI service for generating summaries using Claude
 pub struct AIService {
-    client: Client,
     api_key: String,
 }
 
 impl AIService {
     /// Create new AI service
     pub fn new(api_key: String) -> Self {
-        let client = Client::new();
-        info!("✅ AI service initialized");
-        Self { client, api_key }
+        info!("✅ Claude AI service initialized");
+        Self { api_key }
     }
     
     /// Generate AI summary - title only version (lightweight)
@@ -51,7 +50,7 @@ Format as JSON with fields: summary, key_points (array), recommendation, confide
             ml_prediction.reasoning
         );
         
-        let response = self.call_openai(&prompt, 800).await?;
+        let response = self.call_claude(&prompt, 1000).await?;
         self.parse_ai_response(response, "TITLE_ONLY", resource_id)
     }
     
@@ -64,10 +63,10 @@ Format as JSON with fields: summary, key_points (array), recommendation, confide
     ) -> Result<AISummaryResult> {
         info!("🤖 Generating full AI summary for resource_id: {}", tender.resource_id);
         
-        // Truncate PDF content if too long (keep within token limits)
-        let truncated_pdf = if pdf_content.pdf_text.len() > 8000 {
-            warn!("📄 Truncating PDF content from {} to 8000 chars", pdf_content.pdf_text.len());
-            format!("{}...[TRUNCATED]", &pdf_content.pdf_text[..8000])
+        // Truncate PDF content if too long (keep within token limits - Claude has higher limits than GPT-4)
+        let truncated_pdf = if pdf_content.pdf_text.len() > 15000 {
+            warn!("📄 Truncating PDF content from {} to 15000 chars", pdf_content.pdf_text.len());
+            format!("{}...[TRUNCATED]", &pdf_content.pdf_text[..15000])
         } else {
             pdf_content.pdf_text.clone()
         };
@@ -117,55 +116,49 @@ Format as JSON with fields: summary, key_points (array), recommendation, confide
             ml_prediction.reasoning
         );
         
-        let response = self.call_openai(&prompt, 1500).await?;
+        let response = self.call_claude(&prompt, 2000).await?;
         self.parse_ai_response(response, "FULL_PDF", tender.resource_id)
     }
     
-    /// Call OpenAI API
-    async fn call_openai(&self, prompt: &str, max_tokens: u32) -> Result<String> {
-        debug!("🔗 Calling OpenAI API with prompt length: {}", prompt.len());
+    /// Call Claude API
+    async fn call_claude(&self, prompt: &str, max_tokens: i32) -> Result<String> {
+        debug!("🔗 Calling Claude API with prompt length: {}", prompt.len());
         
-        let request_body = json!({
-            "model": "gpt-4",
-            "messages": [
-                {
-                    "role": "system",
-                    "content": "You are an expert tender analyst with deep knowledge of public procurement processes, technical requirements assessment, and business strategy."
-                },
-                {
-                    "role": "user", 
-                    "content": prompt
+        let request = anthropic_sdk::Client::new()
+            .version("2023-06-01")
+            .auth(&self.api_key)
+            .model("claude-3-5-sonnet-20241022")
+            .messages(&json!([
+                {"role": "user", "content": prompt}
+            ]))
+            .max_tokens(max_tokens)
+            .build()
+            .map_err(|e| anyhow::anyhow!("Failed to build Claude request: {}", e))?;
+
+        let message = Arc::new(Mutex::new(String::new()));
+        let message_clone = Arc::clone(&message);
+
+        request
+            .execute(move |text| {
+                let message_clone = Arc::clone(&message_clone);
+                async move {
+                    debug!("Claude response chunk: {}", text);
+                    let mut message = message_clone.lock().unwrap();
+                    *message += &text;
                 }
-            ],
-            "max_tokens": max_tokens,
-            "temperature": 0.3
-        });
+            })
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to execute Claude request: {}", e))?;
+
+        let response_text = Arc::try_unwrap(message).unwrap().into_inner().unwrap();
         
-        let response = self.client
-            .post("https://api.openai.com/v1/chat/completions")
-            .header("Authorization", format!("Bearer {}", self.api_key))
-            .header("Content-Type", "application/json")
-            .json(&request_body)
-            .send()
-            .await?;
-        
-        if !response.status().is_success() {
-            let error_text = response.text().await?;
-            return Err(anyhow::anyhow!("OpenAI API error: {}", error_text));
-        }
-        
-        let response_json: Value = response.json().await?;
-        let content = response_json["choices"][0]["message"]["content"]
-            .as_str()
-            .ok_or_else(|| anyhow::anyhow!("No content in OpenAI response"))?;
-        
-        info!("✅ OpenAI API response received, length: {}", content.len());
-        Ok(content.to_string())
+        info!("✅ Claude API response received, length: {}", response_text.len());
+        Ok(response_text)
     }
     
     /// Parse AI response into structured result
     fn parse_ai_response(&self, response: String, summary_type: &str, resource_id: i64) -> Result<AISummaryResult> {
-        debug!("🔍 Parsing AI response for resource_id: {}", resource_id);
+        debug!("🔍 Parsing Claude response for resource_id: {}", resource_id);
         
         // Try to parse as JSON first
         if let Ok(json_response) = serde_json::from_str::<Value>(&response) {
@@ -184,20 +177,20 @@ Format as JSON with fields: summary, key_points (array), recommendation, confide
                 key_points,
                 recommendation,
                 confidence_assessment,
-                processing_notes: vec!["Successfully parsed structured AI response".to_string()],
+                processing_notes: vec!["Successfully parsed structured Claude response".to_string()],
                 created_at: Utc::now(),
             })
         } else {
             // Fallback: use entire response as summary
-            warn!("⚠️ Could not parse AI response as JSON, using as plain text");
+            warn!("⚠️ Could not parse Claude response as JSON, using as plain text");
             Ok(AISummaryResult {
                 resource_id,
                 summary_type: summary_type.to_string(),
                 ai_summary: response,
-                key_points: vec!["AI response was in plain text format".to_string()],
+                key_points: vec!["Claude response was in plain text format".to_string()],
                 recommendation: "Review the summary for recommendations".to_string(),
                 confidence_assessment: "Unknown - response format issue".to_string(),
-                processing_notes: vec!["AI response could not be parsed as JSON".to_string()],
+                processing_notes: vec!["Claude response could not be parsed as JSON".to_string()],
                 created_at: Utc::now(),
             })
         }

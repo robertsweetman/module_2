@@ -1,13 +1,21 @@
 # AI Summary Lambda
 
-This lambda processes messages from the `ai_summary_queue` and generates comprehensive AI summaries of tender opportunities using OpenAI's GPT-4 API.
+This lambda processes messages from the `ai_summary_queue` and generates comprehensive AI summaries of tender opportunities using Anthropic's Claude 3.5 Sonnet API.
+
+## Architecture
+
+The AI Summary lambda is the final stage in the tender processing pipeline:
+
+```
+postgres_dataload → pdf_processing → ml_bid_predictor → ai_summary
+```
 
 ## Processing Flow
 
 1. **Receive SQS Message**: Gets `AISummaryMessage` from ai_summary_queue
 2. **Strategy Selection**: Choose title-only or full PDF processing
 3. **Database Fetch**: Get complete tender record and PDF content if needed  
-4. **AI Processing**: Generate summary using OpenAI GPT-4
+4. **AI Processing**: Generate summary using Claude 3.5 Sonnet
 5. **Store Results**: Save summary to `ai_summaries` table
 6. **Send Notification**: Publish completion notification to SNS topic
 
@@ -100,7 +108,7 @@ CREATE TABLE ai_summaries (
 Required environment variables:
 
 - `DATABASE_URL`: PostgreSQL connection string
-- `OPENAI_API_KEY`: OpenAI API key for GPT-4 access
+- `ANTHROPIC_API_KEY`: Anthropic API key for Claude 3.5 Sonnet access
 - `SNS_TOPIC_ARN`: SNS topic for notifications (future use)
 - `AWS_REGION`: AWS region (defaults to eu-west-1)
 
@@ -110,7 +118,7 @@ Required environment variables:
 
 The lambda uses structured prompts that include:
 - Tender details (title, authority, value, deadline)
-- PDF content (truncated to 8000 chars if necessary)
+- PDF content (truncated to 15000 chars if necessary)
 - Detected procurement codes
 - ML prediction results and reasoning
 
@@ -129,11 +137,11 @@ If JSON parsing fails, the entire response is used as the summary.
 - Messages that fail processing don't cause the entire batch to fail
 - Failed messages are sent to the `ai-summary-dlq` dead letter queue after 3 attempts
 - Database connection issues are retried automatically
-- OpenAI API errors are logged and result in processing failure
+- Claude API errors are logged and result in processing failure
 
 ## Performance Considerations
 
-- **Concurrency**: Limited to 3 concurrent executions to avoid OpenAI rate limits
+- **Concurrency**: Limited to 3 concurrent executions to avoid Claude API rate limits
 - **Memory**: 512MB allocated for AI API calls and text processing
 - **Timeout**: 5 minutes to handle API response delays
 - **Database**: Uses connection pooling with max 5 connections
@@ -142,14 +150,14 @@ If JSON parsing fails, the entire response is used as the summary.
 
 Key metrics to monitor:
 - Processing time per summary
-- OpenAI API response times
+- Claude API response times
 - Database query performance
 - Dead letter queue message count
-- Cost per summary (OpenAI API usage)
+- Cost per summary (Claude API usage)
 
 ## Cost Optimization
 
-- PDF content is truncated to 8000 characters to stay within token limits
-- GPT-4 temperature set to 0.3 for consistent, focused responses
+- PDF content is truncated to 15000 characters to stay within token limits
+- Claude 3.5 Sonnet configured for focused, consistent responses
 - Efficient database queries to minimize connection time
 - Batch processing disabled (batch_size=1) for optimal AI API usage

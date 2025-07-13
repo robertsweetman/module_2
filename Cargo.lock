@@ -63,6 +63,7 @@ dependencies = [
 name = "ai_summary"
 version = "0.1.0"
 dependencies = [
+ "anthropic-sdk",
  "anyhow",
  "aws-config",
  "aws-sdk-sns",
@@ -100,6 +101,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "819e7219dbd41043ac279b19830f2efc897156490d7fd6ea916720117ee66311"
 dependencies = [
  "libc",
+]
+
+[[package]]
+name = "anthropic-sdk"
+version = "0.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b0e11a7c14d8af2206c110597bf7f2919ea0c1dc5011c017d2d4dc9d033f5363"
+dependencies = [
+ "anyhow",
+ "dotenv",
+ "futures",
+ "reqwest 0.12.19",
+ "serde",
+ "serde_json",
+ "tokio",
 ]
 
 [[package]]
@@ -1184,6 +1200,12 @@ dependencies = [
  "quote",
  "syn",
 ]
+
+[[package]]
+name = "dotenv"
+version = "0.15.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "77c90badedccf4105eca100756a0b1289e191f6fcbdadd3cee1d2f614f97da8f"
 
 [[package]]
 name = "dotenvy"
@@ -2282,7 +2304,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "07033963ba89ebaf1584d767badaa2e8fcec21aedea6b8c0346d487d49c28667"
 dependencies = [
  "cfg-if",
- "windows-targets 0.52.6",
+ "windows-targets 0.48.5",
 ]
 
 [[package]]

@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       lambda:
-        description: "Lambda to build/deploy (all | postgres_dataload | pdf_processing | get_data | ml_bid_predictor)"
+        description: "Lambda to build/deploy (all | postgres_dataload | pdf_processing | get_data | ml_bid_predictor | ai_summary)"
         required: true
         default: "all"
         type: choice
@@ -18,9 +18,11 @@ on:
           - pdf_processing
           - get_data
           - ml_bid_predictor
+          - ai_summary
 
 env:
   LAMBDA_BUCKET: ${{ secrets.LAMBDA_BUCKET_NAME }}  # Set this as a GitHub secret
+  ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}  # Set this as a GitHub secret
 
 jobs:
   build-and-deploy:
@@ -79,6 +81,11 @@ jobs:
         run: |
           cargo lambda build --release --target x86_64-unknown-linux-musl --package ml_bid_predictor
 
+      - name: Build AI Summary Lambda
+        if: ${{ inputs.lambda == 'all' || inputs.lambda == 'ai_summary' }}
+        run: |
+          cargo lambda build --release --target x86_64-unknown-linux-musl --package ai_summary
+
       - name: Package Postgres Dataload Lambda
         if: ${{ inputs.lambda == 'all' || inputs.lambda == 'postgres_dataload' }}
         run: |
@@ -107,6 +114,13 @@ jobs:
           zip ml_bid_predictor.zip bootstrap
           rm bootstrap
 
+      - name: Package AI Summary Lambda
+        if: ${{ inputs.lambda == 'all' || inputs.lambda == 'ai_summary' }}
+        run: |
+          cp ./target/lambda/ai_summary/bootstrap ./bootstrap
+          zip ai_summary.zip bootstrap
+          rm bootstrap
+
       - name: Debug - List contents before upload
         run: |
           pwd
@@ -127,7 +141,7 @@ jobs:
           fi
 
       - name: Upload to S3
-        if: ${{ inputs.lambda == 'all' || inputs.lambda == 'postgres_dataload' || inputs.lambda == 'pdf_processing' || inputs.lambda == 'get_data' || inputs.lambda == 'ml_bid_predictor' }}
+        if: ${{ inputs.lambda == 'all' || inputs.lambda == 'postgres_dataload' || inputs.lambda == 'pdf_processing' || inputs.lambda == 'get_data' || inputs.lambda == 'ml_bid_predictor' || inputs.lambda == 'ai_summary' }}
         run: |
           if [[ "${{ inputs.lambda }}" == "postgres_dataload" || "${{ inputs.lambda }}" == "all" ]]; then
             aws s3 cp postgres_dataload.zip s3://$LAMBDA_BUCKET/postgres_dataload.zip
@@ -141,9 +155,12 @@ jobs:
           if [[ "${{ inputs.lambda }}" == "ml_bid_predictor" || "${{ inputs.lambda }}" == "all" ]]; then
             aws s3 cp ml_bid_predictor.zip s3://$LAMBDA_BUCKET/ml_bid_predictor.zip
           fi
+          if [[ "${{ inputs.lambda }}" == "ai_summary" || "${{ inputs.lambda }}" == "all" ]]; then
+            aws s3 cp ai_summary.zip s3://$LAMBDA_BUCKET/ai_summary.zip
+          fi
 
       - name: Update Lambda Functions
-        if: ${{ inputs.lambda == 'all' || inputs.lambda == 'postgres_dataload' || inputs.lambda == 'pdf_processing' || inputs.lambda == 'get_data' }}
+        if: ${{ inputs.lambda == 'all' || inputs.lambda == 'postgres_dataload' || inputs.lambda == 'pdf_processing' || inputs.lambda == 'get_data' || inputs.lambda == 'ml_bid_predictor' || inputs.lambda == 'ai_summary' }}
         run: |
           if [[ "${{ inputs.lambda }}" == "postgres_dataload" || "${{ inputs.lambda }}" == "all" ]]; then
             aws lambda update-function-code --function-name postgres_dataload --s3-bucket $LAMBDA_BUCKET --s3-key postgres_dataload.zip
@@ -156,6 +173,9 @@ jobs:
           fi
           if [[ "${{ inputs.lambda }}" == "ml_bid_predictor" || "${{ inputs.lambda }}" == "all" ]]; then
             aws lambda update-function-code --function-name ml_bid_predictor --s3-bucket $LAMBDA_BUCKET --s3-key ml_bid_predictor.zip
+          fi
+          if [[ "${{ inputs.lambda }}" == "ai_summary" || "${{ inputs.lambda }}" == "all" ]]; then
+            aws lambda update-function-code --function-name ai_summary --s3-bucket $LAMBDA_BUCKET --s3-key ai_summary.zip
           fi
 
       - name: Wait for Postgres Dataload Update
@@ -177,3 +197,8 @@ jobs:
         if: ${{ inputs.lambda == 'all' || inputs.lambda == 'ml_bid_predictor' }}
         run: |
           aws lambda wait function-updated --function-name ml_bid_predictor
+      
+      - name: Wait for AI Summary Update
+        if: ${{ inputs.lambda == 'all' || inputs.lambda == 'ai_summary' }}
+        run: |
+          aws lambda wait function-updated --function-name ai_summary

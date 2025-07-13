@@ -141,7 +141,6 @@ resource "aws_lambda_function" "ai_summary" {
     variables = {
       RUST_BACKTRACE = "1"
       DATABASE_URL = "postgres://${var.db_admin_name}:${var.db_admin_pwd}@${aws_db_instance.postgres.endpoint}/${var.db_name}"
-      OPENAI_API_KEY = var.openai_api_key
       SNS_TOPIC_ARN = aws_sns_topic.ml_predictions.arn
       AWS_REGION = var.aws_region
     }

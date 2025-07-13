@@ -95,7 +95,7 @@ pub struct SNSMessage {
 #[derive(Debug, Clone)]
 pub struct Config {
     pub database_url: String,
-    pub openai_api_key: String,
+    pub anthropic_api_key: String,
     pub sns_topic_arn: String,
     pub aws_region: String,
 }
@@ -105,8 +105,8 @@ impl Config {
         Ok(Self {
             database_url: std::env::var("DATABASE_URL")
                 .map_err(|_| anyhow::anyhow!("DATABASE_URL not set"))?,
-            openai_api_key: std::env::var("OPENAI_API_KEY")
-                .map_err(|_| anyhow::anyhow!("OPENAI_API_KEY not set"))?,
+            anthropic_api_key: std::env::var("ANTHROPIC_API_KEY")
+                .map_err(|_| anyhow::anyhow!("ANTHROPIC_API_KEY not set"))?,
             sns_topic_arn: std::env::var("SNS_TOPIC_ARN")
                 .map_err(|_| anyhow::anyhow!("SNS_TOPIC_ARN not set"))?,
             aws_region: std::env::var("AWS_REGION").unwrap_or_else(|_| "eu-west-1".to_string()),

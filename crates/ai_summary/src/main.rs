@@ -30,7 +30,7 @@ async fn function_handler(event: LambdaEvent<SqsEvent>) -> Result<String, Error>
         Error::from(e.to_string().as_str())
     })?;
     
-    let ai_service = AIService::new(config.openai_api_key.clone());
+    let ai_service = AIService::new(config.anthropic_api_key.clone());
     
     let notification_service = NotificationService::new(&config).await.map_err(|e| {
         error!("Failed to initialize notification service: {}", e);
