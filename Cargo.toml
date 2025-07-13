@@ -3,6 +3,7 @@ members = [
     "crates/postgres_dataload",
     "crates/pdf_processing",
     "crates/get_data",
-    "crates/ml_bid_predictor"
+    "crates/ml_bid_predictor",
+    "crates/ai_summary"
 ]
 resolver = "2"

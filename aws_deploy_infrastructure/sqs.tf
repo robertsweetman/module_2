@@ -170,6 +170,19 @@ resource "aws_sqs_queue" "ai_summary_dlq" {
   }
 }
 
+# Lambda trigger from AI summary SQS
+resource "aws_lambda_event_source_mapping" "ai_summary_sqs_trigger" {
+  event_source_arn = aws_sqs_queue.ai_summary_queue.arn
+  function_name    = aws_lambda_function.ai_summary.function_name
+  
+  batch_size       = 1  # Process one summary at a time
+  maximum_batching_window_in_seconds = 0
+  
+  scaling_config {
+    maximum_concurrency = 3  # Limit AI API concurrency to avoid rate limits
+  }
+}
+
 # SQS Queue for SNS notifications
 resource "aws_sqs_queue" "sns_queue" {
   name                      = "sns-notification-queue"

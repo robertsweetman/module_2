@@ -53,6 +53,8 @@ impl QueueHandler {
             resource_id: tender.resource_id.to_string().clone(),
             tender_title: tender.title.clone(),
             ml_prediction: prediction.clone(),
+            // Note: PDF content may be truncated/empty here - AI summary lambda will
+            // fetch complete content from pdf_content table if needed
             pdf_content: tender.pdf_content.clone().unwrap_or_default(),
             priority: priority.to_string(),
             timestamp: Utc::now(),

@@ -47,3 +47,10 @@ variable "notification_emails" {
   type        = list(string)
   default     = []
 }
+
+variable "openai_api_key" {
+  description = "OpenAI API key for AI summary generation"
+  type        = string
+  sensitive   = true
+  # no default - provided by github actions or terraform.tfvars
+}

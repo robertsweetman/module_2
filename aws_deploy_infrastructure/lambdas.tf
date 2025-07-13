@@ -122,3 +122,31 @@ resource "aws_lambda_function" "ml_bid_predictor" {
   timeout = 600  # 10 minutes for ML processing
   memory_size = 1024  # More memory for ML computations
 }
+
+resource "aws_lambda_function" "ai_summary" {
+  function_name = "ai_summary"
+  handler       = "bootstrap"
+  runtime       = "provided.al2"
+  role          = aws_iam_role.lambda_role.arn
+  
+  s3_bucket     = aws_s3_bucket.lambda_bucket.id
+  s3_key        = "ai_summary.zip"
+
+  depends_on = [aws_s3_bucket.lambda_bucket]
+  lifecycle {
+    ignore_changes = [source_code_hash]
+  }
+  
+  environment {
+    variables = {
+      RUST_BACKTRACE = "1"
+      DATABASE_URL = "postgres://${var.db_admin_name}:${var.db_admin_pwd}@${aws_db_instance.postgres.endpoint}/${var.db_name}"
+      OPENAI_API_KEY = var.openai_api_key
+      SNS_TOPIC_ARN = aws_sns_topic.ml_predictions.arn
+      AWS_REGION = var.aws_region
+    }
+  }
+
+  timeout = 300  # 5 minutes for AI processing
+  memory_size = 512  # Moderate memory for AI API calls
+}
