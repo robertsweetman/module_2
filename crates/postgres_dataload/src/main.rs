@@ -117,14 +117,9 @@ async fn function_handler(event: LambdaEvent<Request>) -> Result<Response, Error
     println!("Successfully fetched {} records", records.len());
     
     // After processing the records but before returning the Response
-    // Filter records with non-empty PDF URLs for processing
-    let pdf_records: Vec<serde_json::Value> = records.iter()
-        .filter(|r| !r.pdf_url.is_empty())
-        .map(|r| serde_json::json!({
-            "resource_id": r.resource_id,
-            "pdf_url": r.pdf_url
-        }))
-        .collect();
+    // Split records into PDF and non-PDF for different processing paths
+    let (pdf_records, non_pdf_records): (Vec<&TenderRecord>, Vec<&TenderRecord>) = records.iter()
+        .partition(|r| !r.pdf_url.is_empty());
 
     // Only save if not in test mode
     if !test_mode {
@@ -135,44 +130,87 @@ async fn function_handler(event: LambdaEvent<Request>) -> Result<Response, Error
         }
     }
     
-    if !pdf_records.is_empty() && !test_mode {
-        println!("Found {} records with PDFs, queuing for processing", pdf_records.len());
-
+    if !test_mode {
         // Initialize AWS SDK and SQS client
         let config = aws_config::defaults(aws_config::BehaviorVersion::latest()).load().await;
         let sqs_client = SqsClient::new(&config);
 
-        // Fetch queue URL from the environment
-        let queue_url = match env::var("PDF_PROCESSING_QUEUE_URL") {
-            Ok(url) => url,
-            Err(_) => {
-                println!("Error: PDF_PROCESSING_QUEUE_URL environment variable not set; skipping SQS send.");
-                String::new()
+        // Process records with PDFs - send to PDF processing queue
+        if !pdf_records.is_empty() {
+            println!("Found {} records with PDFs, queuing for PDF processing", pdf_records.len());
+            
+            let pdf_queue_url = match env::var("PDF_PROCESSING_QUEUE_URL") {
+                Ok(url) => url,
+                Err(_) => {
+                    println!("Error: PDF_PROCESSING_QUEUE_URL environment variable not set; skipping PDF processing.");
+                    String::new()
+                }
+            };
+
+            if !pdf_queue_url.is_empty() {
+                for record in pdf_records {
+                    // Send full TenderRecord object as JSON
+                    let message_body = serde_json::to_string(record)?;
+
+                    match sqs_client
+                        .send_message()
+                        .queue_url(&pdf_queue_url)
+                        .message_body(message_body)
+                        .send()
+                        .await
+                    {
+                        Ok(resp) => println!(
+                            "Queued PDF record {} (message ID: {})", 
+                            record.resource_id,
+                            resp.message_id().unwrap_or_default()
+                        ),
+                        Err(e) => println!(
+                            "Failed to queue PDF record {}: {}", 
+                            record.resource_id,
+                            e
+                        ),
+                    }
+                }
             }
-        };
+        }
 
-        if !queue_url.is_empty() {
-            for record in pdf_records {
-                // Each record is already a serde_json::Value containing resource_id and pdf_url
-                let message_body = record.to_string();
+        // Process records without PDFs - send directly to AI summary queue
+        if !non_pdf_records.is_empty() {
+            println!("Found {} records without PDFs, queuing for AI summary", non_pdf_records.len());
+            
+            let ai_summary_queue_url = match env::var("AI_SUMMARY_QUEUE_URL") {
+                Ok(url) => url,
+                Err(_) => {
+                    println!("Error: AI_SUMMARY_QUEUE_URL environment variable not set; skipping AI summary.");
+                    String::new()
+                }
+            };
 
-                match sqs_client
-                    .send_message()
-                    .queue_url(&queue_url)
-                    .message_body(message_body)
-                    .send()
-                    .await
-                {
-                    Ok(resp) => println!(
-                        "Queued record {} (message ID: {})", 
-                        record["resource_id"].as_i64().unwrap_or(0),
-                        resp.message_id().unwrap_or_default()
-                    ),
-                    Err(e) => println!(
-                        "Failed to queue record {}: {}", 
-                        record["resource_id"].as_i64().unwrap_or(0),
-                        e
-                    ),
+            if !ai_summary_queue_url.is_empty() {
+                for record in non_pdf_records {
+                    // Send full TenderRecord object as JSON, with processing_stage marker
+                    let mut record_with_stage = serde_json::to_value(record)?;
+                    record_with_stage["processing_stage"] = serde_json::Value::String("ai_summary_direct".to_string());
+                    let message_body = record_with_stage.to_string();
+
+                    match sqs_client
+                        .send_message()
+                        .queue_url(&ai_summary_queue_url)
+                        .message_body(message_body)
+                        .send()
+                        .await
+                    {
+                        Ok(resp) => println!(
+                            "Queued non-PDF record {} for AI summary (message ID: {})", 
+                            record.resource_id,
+                            resp.message_id().unwrap_or_default()
+                        ),
+                        Err(e) => println!(
+                            "Failed to queue non-PDF record {}: {}", 
+                            record.resource_id,
+                            e
+                        ),
+                    }
                 }
             }
         }

@@ -16,6 +16,8 @@ serde_json = "1.0.140"
 aws-sdk-sqs = "1.73.0"
 aws-sdk-s3 = "1.96.0"
 aws-config = "1.6.3"
+chrono = "0.4.41"
+bigdecimal = { version = "0.4.8", features = ["serde"] }
 
 [[bin]]
 name = "pdf_processing"

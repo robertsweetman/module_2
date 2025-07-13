@@ -9,6 +9,8 @@ use serde_json;
 use aws_config;
 use aws_sdk_sqs::Client as SqsClient;
 use aws_sdk_s3::Client as S3Client;
+use chrono::{NaiveDate, NaiveDateTime};
+use bigdecimal::BigDecimal;
 
 // Import the function from the lib.rs file
 use pdf_processing::{extract_codes, extract_text_from_pdf};
@@ -16,10 +18,23 @@ use pdf_processing::{extract_codes, extract_text_from_pdf};
 // Track if this container has been used
 // Removed: Unused after redesign
 
-#[derive(Debug, Serialize, Deserialize)]
-struct PdfProcessingRequest {
-    resource_id: i64,  // Changed from String to i64 to match the JSON
+#[derive(Debug, Serialize, Deserialize, Clone)]
+struct TenderRecord {
+    title: String,
+    resource_id: i64,
+    ca: String,
+    info: String,
+    published: Option<NaiveDateTime>,
+    deadline: Option<NaiveDateTime>,
+    procedure: String,
+    status: String,
     pdf_url: String,
+    awarddate: Option<NaiveDate>,
+    value: Option<BigDecimal>,
+    cycle: String,
+    bid: Option<i32>, // 1 = bid, 0 = no bid, NULL = unlabeled
+    // This will be added during PDF processing
+    pdf_content: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -71,14 +86,15 @@ async fn function_handler(event: LambdaEvent<SqsEvent>) -> Result<Response, Erro
     };
 
     println!("Attempting to parse JSON from SQS message body...");
-    // Deserialize the message body into our request struct
-    let PdfProcessingRequest { resource_id, pdf_url } = match serde_json::from_str::<PdfProcessingRequest>(body_str) {
-        Ok(req) => {
-            println!("Successfully parsed JSON: resource_id={}, pdf_url={}", req.resource_id, req.pdf_url);
-            req
+    // Deserialize the message body into our TenderRecord struct
+    let mut tender_record = match serde_json::from_str::<TenderRecord>(body_str) {
+        Ok(record) => {
+            println!("Successfully parsed TenderRecord: resource_id={}, title={}, pdf_url={}", 
+                    record.resource_id, record.title, record.pdf_url);
+            record
         },
         Err(e) => {
-            println!("ERROR: Failed to parse JSON: {:?}", e);
+            println!("ERROR: Failed to parse TenderRecord JSON: {:?}", e);
             println!("Raw message body: {}", body_str);
             return Ok(Response {
                 resource_id: String::new(),
@@ -89,14 +105,14 @@ async fn function_handler(event: LambdaEvent<SqsEvent>) -> Result<Response, Erro
         }
     };
     
-    // resource_id is already i64, no need to parse
-    let resource_id_int = resource_id;
+    let resource_id_int = tender_record.resource_id;
+    let pdf_url = tender_record.pdf_url.clone();
     
     println!("Fresh container processing PDF for resource_id: {}", resource_id_int);
 
     if pdf_url.is_empty() {
         return Ok(Response {
-            resource_id: resource_id.to_string(),
+            resource_id: resource_id_int.to_string(),
             success: false,
             message: "No PDF URL provided".to_string(),
             text_length: None,
@@ -120,7 +136,7 @@ async fn function_handler(event: LambdaEvent<SqsEvent>) -> Result<Response, Erro
         Err(e) => {
             println!("ERROR: DATABASE_URL not found: {:?}", e);
             return Ok(Response {
-                resource_id: resource_id.to_string(),
+                resource_id: resource_id_int.to_string(),
                 success: false,
                 message: format!("DATABASE_URL environment variable not set: {:?}", e),
                 text_length: None,
@@ -145,7 +161,7 @@ async fn function_handler(event: LambdaEvent<SqsEvent>) -> Result<Response, Erro
             Err(e) => {
                 let _ = db_pool.close().await;
                 return Ok(Response {
-                    resource_id: resource_id.to_string(),
+                    resource_id: resource_id_int.to_string(),
                     success: false,
                     message: format!("Failed to download PDF: HTTP {}", e.status().unwrap_or_default()),
                     text_length: None,
@@ -155,7 +171,7 @@ async fn function_handler(event: LambdaEvent<SqsEvent>) -> Result<Response, Erro
         Err(e) => {
             let _ = db_pool.close().await;
             return Ok(Response {
-                resource_id: resource_id.to_string(),
+                resource_id: resource_id_int.to_string(),
                 success: false,
                 message: format!("Failed to send request: {}", e),
                 text_length: None,
@@ -173,7 +189,7 @@ async fn function_handler(event: LambdaEvent<SqsEvent>) -> Result<Response, Erro
         Err(e) => {
             let _ = db_pool.close().await;
             return Ok(Response {
-                resource_id: resource_id.to_string(),
+                resource_id: resource_id_int.to_string(),
                 success: false,
                 message: format!("Failed to extract text from PDF: {}", e),
                 text_length: None,
@@ -191,7 +207,7 @@ async fn function_handler(event: LambdaEvent<SqsEvent>) -> Result<Response, Erro
         Err(e) => {
             let _ = db_pool.close().await;
             return Ok(Response {
-                resource_id: resource_id.to_string(),
+                resource_id: resource_id_int.to_string(),
                 success: false,
                 message: format!("Failed to load codes from S3: {}", e),
                 text_length: Some(pdf_text.len()),
@@ -210,7 +226,7 @@ async fn function_handler(event: LambdaEvent<SqsEvent>) -> Result<Response, Erro
     if let Err(e) = ensure_table_exists(&db_pool).await {
         let _ = db_pool.close().await;
         return Ok(Response {
-            resource_id: resource_id.to_string(),
+            resource_id: resource_id_int.to_string(),
             success: false,
             message: format!("Failed to ensure table exists: {}", e),
             text_length: Some(pdf_text.len()),
@@ -243,9 +259,17 @@ async fn function_handler(event: LambdaEvent<SqsEvent>) -> Result<Response, Erro
                 }
             }
 
+            // Forward enriched record to ML prediction queue
+            println!("Forwarding enriched record to ML prediction queue");
+            tender_record.pdf_content = Some(pdf_text.clone());
+            if let Err(e) = forward_to_ml_prediction(&tender_record).await {
+                println!("WARNING: Failed to forward to ML prediction queue: {}", e);
+                // Don't fail the whole process if queue forwarding fails
+            }
+
             // Build success response
             let response = Response {
-                resource_id: resource_id.to_string(),
+                resource_id: resource_id_int.to_string(),
                 success: true,
                 message: "Successfully processed PDF".to_string(),
                 text_length: Some(pdf_text.len()),
@@ -263,7 +287,7 @@ async fn function_handler(event: LambdaEvent<SqsEvent>) -> Result<Response, Erro
             println!("NOT deleting SQS message due to database storage failure - message will retry");
             
             Ok(Response {
-                resource_id: resource_id.to_string(),
+                resource_id: resource_id_int.to_string(),
                 success: false,
                 message: format!("Failed to store PDF content: {}", e),
                 text_length: Some(pdf_text.len()),
@@ -360,6 +384,44 @@ async fn load_codes_from_s3() -> Result<Vec<String>, Box<dyn std::error::Error +
         .collect();
     
     Ok(codes)
+}
+
+async fn forward_to_ml_prediction(tender_record: &TenderRecord) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    println!("Forwarding tender record {} to ML prediction queue", tender_record.resource_id);
+    
+    // Get ML prediction queue URL
+    let ml_queue_url = env::var("ML_PREDICTION_QUEUE_URL")
+        .map_err(|_| "ML_PREDICTION_QUEUE_URL environment variable not set")?;
+    
+    // Initialize SQS client
+    let config = aws_config::defaults(aws_config::BehaviorVersion::latest()).load().await;
+    let sqs_client = SqsClient::new(&config);
+    
+    // Add processing stage marker
+    let mut record_with_stage = serde_json::to_value(tender_record)?;
+    record_with_stage["processing_stage"] = serde_json::Value::String("ml_prediction".to_string());
+    let message_body = record_with_stage.to_string();
+    
+    // Send message
+    match sqs_client
+        .send_message()
+        .queue_url(&ml_queue_url)
+        .message_body(message_body)
+        .send()
+        .await
+    {
+        Ok(resp) => {
+            println!("Successfully forwarded record {} to ML prediction queue (message ID: {})", 
+                    tender_record.resource_id, 
+                    resp.message_id().unwrap_or_default());
+            Ok(())
+        },
+        Err(e) => {
+            println!("Failed to forward record {} to ML prediction queue: {}", 
+                    tender_record.resource_id, e);
+            Err(Box::new(e))
+        }
+    }
 }
 
 #[tokio::main]

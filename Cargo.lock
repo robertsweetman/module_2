@@ -2742,6 +2742,8 @@ dependencies = [
  "aws-sdk-s3",
  "aws-sdk-sqs",
  "aws_lambda_events 0.16.1",
+ "bigdecimal",
+ "chrono",
  "lambda_runtime",
  "openssl",
  "pdf-extract",
