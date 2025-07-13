@@ -50,10 +50,10 @@ impl QueueHandler {
         };
         
         let ai_message = AISummaryMessage {
-            resource_id: tender.resource_id.clone(),
+            resource_id: tender.resource_id.to_string().clone(),
             tender_title: tender.title.clone(),
             ml_prediction: prediction.clone(),
-            pdf_content: tender.pdf_text.clone().unwrap_or_default(),
+            pdf_content: tender.pdf_content.clone().unwrap_or_default(),
             priority: priority.to_string(),
             timestamp: Utc::now(),
         };
@@ -89,7 +89,7 @@ impl QueueHandler {
         
         let sns_message = SNSMessage {
             message_type: "ML_BID_PREDICTION".to_string(),
-            resource_id: tender.resource_id.clone(),
+            resource_id: tender.resource_id.to_string().clone(),
             title: tender.title.clone(),
             priority: "URGENT".to_string(),
             summary: format!(
@@ -100,13 +100,12 @@ impl QueueHandler {
             action_required: "Review tender details and initiate bid process if appropriate".to_string(),
             timestamp: Utc::now(),
             metadata: serde_json::json!({
-                "ca": tender.ca,
-                "estimated_value": tender.estimated_value,
+                "ca": tender.contracting_authority,
+                "estimated_value": tender.value,
                 "deadline": tender.deadline,
                 "ml_confidence": prediction.confidence,
                 "ml_reasoning": prediction.reasoning,
-                "feature_scores": prediction.feature_scores,
-                "codes_count": tender.codes_count
+                "feature_scores": prediction.feature_scores
             }),
         };
         
@@ -139,28 +138,28 @@ mod tests {
     use chrono::Utc;
 
     fn create_test_tender() -> TenderRecord {
+        // use chrono::NaiveDate;
+        use bigdecimal::BigDecimal;
+        use std::str::FromStr;
+        
         TenderRecord {
-            resource_id: "test-123".to_string(),
+            resource_id: 123,
             title: "Test Software Development".to_string(),
-            ca: "Test Authority".to_string(),
-            procedure: Some("Open".to_string()),
-            pdf_text: Some("Test PDF content".to_string()),
-            codes_count: Some(2),
-            published_date: Some(Utc::now()),
-            deadline: Some(Utc::now()),
-            estimated_value: Some("€50,000".to_string()),
-            description: Some("Test description".to_string()),
-            code_33000000: Some(false),
-            code_48000000: Some(true),
-            code_72000000: Some(false),
-            code_79000000: Some(false),
-            code_80000000: Some(false),
-            code_85000000: Some(false),
-            code_90000000: Some(false),
-            code_92000000: Some(false),
-            pdf_url: Some("test.pdf".to_string()),
-            source: Some("test".to_string()),
+            contracting_authority: "Test Authority".to_string(),
+            info: "Test info".to_string(),
+            published: None,
+            deadline: None,
+            procedure: "Open".to_string(),
+            status: "Open".to_string(),
+            pdf_url: "test.pdf".to_string(),
+            awarddate: None,
+            value: Some(BigDecimal::from_str("50000").unwrap()),
+            cycle: "2024".to_string(),
             bid: None,
+            pdf_content: Some("Test PDF content".to_string()),
+            detected_codes: Some(vec!["72000000".to_string(), "72200000".to_string()]),
+            codes_count: Some(2), // Test with 2 detected codes
+            processing_stage: Some("ml_prediction".to_string()),
             ml_bid: None,
             ml_confidence: None,
             ml_reasoning: None,
@@ -189,7 +188,7 @@ mod tests {
         
         let sns_message = SNSMessage {
             message_type: "MANUAL_REVIEW".to_string(),
-            resource_id: tender.resource_id.clone(),
+            resource_id: tender.resource_id.to_string().clone(),
             title: tender.title.clone(),
             priority: "HIGH".to_string(),
             summary: "Test summary".to_string(),
@@ -208,10 +207,10 @@ mod tests {
         let prediction = create_test_prediction();
         
         let ai_message = AISummaryMessage {
-            resource_id: tender.resource_id.clone(),
+            resource_id: tender.resource_id.to_string().clone(),
             tender_title: tender.title.clone(),
             ml_prediction: prediction,
-            pdf_content: tender.pdf_text.clone().unwrap_or_default(),
+            pdf_content: tender.pdf_content.clone().unwrap_or_default(),
             priority: "URGENT".to_string(),
             timestamp: Utc::now(),
         };

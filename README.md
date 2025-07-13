@@ -85,13 +85,14 @@ postgres_dataload → (if has PDF) → pdf_processing_queue → ml_prediction_qu
 **Target message format for ALL queues:**
 ```json
 {
-  "resource_id": "12345",
+  "resource_id": 12345,
   "title": "Software Development Services", 
   "contracting_authority": "HSE",
   "pdf_url": "https://example.com/tender.pdf",
   "pdf_content": "extracted text...",  // Added by pdf_processing
-  "deadline": "2025-08-15",
-  "estimated_value": "€50,000",
+  "codes_count": 3,                    // Added by pdf_processing - count of detected codes
+  "deadline": "2025-08-15T10:00:00",
+  "value": "50000.00",
   "ml_prediction": {                    // Added by ml_bid_predictor
     "should_bid": true,
     "confidence": 0.85,

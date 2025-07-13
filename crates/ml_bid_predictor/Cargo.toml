@@ -15,6 +15,7 @@ aws-sdk-sns = "1.73.0"
 smartcore = "0.3.2"  # Pure Rust ML library
 nalgebra = "0.33.0"  # Linear algebra for feature vectors
 regex = "1.10.0"     # Text processing
+bigdecimal = { version = "0.4.8", features = ["serde"] }
 
 # Database
 sqlx = { version = "0.8.6", features = ["postgres", "runtime-tokio-native-tls", "chrono", "bigdecimal"] }

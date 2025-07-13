@@ -1,34 +1,29 @@
 use serde::{Deserialize, Serialize};
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Utc, NaiveDateTime, NaiveDate};
+use bigdecimal::BigDecimal;
 
 /// Tender record structure matching the database schema
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TenderRecord {
-    pub resource_id: String,
+    pub resource_id: i64,
     pub title: String,
-    pub ca: String,                    // Contracting authority
-    pub procedure: Option<String>,
-    pub pdf_text: Option<String>,
-    pub codes_count: Option<i32>,
-    pub published_date: Option<DateTime<Utc>>,
-    pub deadline: Option<DateTime<Utc>>,
-    pub estimated_value: Option<String>,
-    pub description: Option<String>,
+    pub contracting_authority: String,
+    pub info: String,
+    pub published: Option<NaiveDateTime>,
+    pub deadline: Option<NaiveDateTime>,
+    pub procedure: String,
+    pub status: String,
+    pub pdf_url: String,
+    pub awarddate: Option<NaiveDate>,
+    pub value: Option<BigDecimal>,
+    pub cycle: String,
+    pub bid: Option<i32>, // 1 = bid, 0 = no bid, NULL = unlabeled
+    pub pdf_content: Option<String>, // Added by pdf_processing
+    pub detected_codes: Option<Vec<String>>, // Added by pdf_processing - actual codes found
+    pub codes_count: Option<i32>, // Added by pdf_processing - count of detected codes
+    pub processing_stage: Option<String>, // Track pipeline stage
     
-    // Code columns (boolean flags)
-    pub code_33000000: Option<bool>,
-    pub code_48000000: Option<bool>,
-    pub code_72000000: Option<bool>,
-    pub code_79000000: Option<bool>,
-    pub code_80000000: Option<bool>,
-    pub code_85000000: Option<bool>,
-    pub code_90000000: Option<bool>,
-    pub code_92000000: Option<bool>,
-    
-    // Additional metadata
-    pub pdf_url: Option<String>,
-    pub source: Option<String>,
-    pub bid: Option<bool>,             // Ground truth (if available)
+    // ML prediction results (added by ml_bid_predictor)
     pub ml_bid: Option<bool>,          // ML prediction result
     pub ml_confidence: Option<f64>,    // ML confidence score
     pub ml_reasoning: Option<String>,  // ML reasoning/category

@@ -22,7 +22,7 @@ use pdf_processing::{extract_codes, extract_text_from_pdf};
 struct TenderRecord {
     title: String,
     resource_id: i64,
-    ca: String,
+    contracting_authority: String,
     info: String,
     published: Option<NaiveDateTime>,
     deadline: Option<NaiveDateTime>,
@@ -35,6 +35,9 @@ struct TenderRecord {
     bid: Option<i32>, // 1 = bid, 0 = no bid, NULL = unlabeled
     // This will be added during PDF processing
     pdf_content: Option<String>,
+    detected_codes: Option<Vec<String>>, // Added by pdf_processing - actual codes found
+    codes_count: Option<i32>, // Added by pdf_processing - count of detected codes
+    processing_stage: Option<String>, // e.g. "ml_prediction"
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -262,6 +265,9 @@ async fn function_handler(event: LambdaEvent<SqsEvent>) -> Result<Response, Erro
             // Forward enriched record to ML prediction queue
             println!("Forwarding enriched record to ML prediction queue");
             tender_record.pdf_content = Some(pdf_text.clone());
+            tender_record.detected_codes = Some(detected_codes.clone());
+            tender_record.codes_count = Some(codes_count as i32);
+            tender_record.processing_stage = Some("ml_prediction".to_string());
             if let Err(e) = forward_to_ml_prediction(&tender_record).await {
                 println!("WARNING: Failed to forward to ML prediction queue: {}", e);
                 // Don't fail the whole process if queue forwarding fails

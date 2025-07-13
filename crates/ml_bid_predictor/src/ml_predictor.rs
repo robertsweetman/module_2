@@ -192,31 +192,31 @@ impl Default for OptimizedBidPredictor {
 mod tests {
     use super::*;
     use crate::types::TenderRecord;
-    use chrono::Utc;
+    // use chrono::Utc;
 
     fn create_test_tender() -> TenderRecord {
+        // use chrono::NaiveDate;
+        use bigdecimal::BigDecimal;
+        use std::str::FromStr;
+        
         TenderRecord {
-            resource_id: "test-123".to_string(),
+            resource_id: 123567765,
             title: "Software Development Services".to_string(),
-            ca: "Test Authority".to_string(),
-            procedure: Some("Open".to_string()),
-            pdf_text: Some("Software development and technical support services".to_string()),
-            codes_count: Some(3),
-            published_date: Some(Utc::now()),
-            deadline: Some(Utc::now()),
-            estimated_value: Some("€100,000".to_string()),
-            description: Some("Test description".to_string()),
-            code_33000000: Some(false),
-            code_48000000: Some(true),
-            code_72000000: Some(true),
-            code_79000000: Some(false),
-            code_80000000: Some(false),
-            code_85000000: Some(false),
-            code_90000000: Some(false),
-            code_92000000: Some(false),
-            pdf_url: Some("test.pdf".to_string()),
-            source: Some("test".to_string()),
+            contracting_authority: "Test Authority".to_string(),
+            info: "Test info".to_string(),
+            published: None,
+            deadline: None,
+            procedure: "Open".to_string(),
+            status: "Open".to_string(),
+            pdf_url: "test.pdf".to_string(),
+            awarddate: None,
+            value: Some(BigDecimal::from_str("100000").unwrap()),
+            cycle: "2024".to_string(),
             bid: None,
+            pdf_content: Some("Software development and technical support services".to_string()),
+            detected_codes: Some(vec!["72000000".to_string(), "72200000".to_string(), "72600000".to_string()]),
+            codes_count: Some(3),
+            processing_stage: Some("ml_prediction".to_string()),
             ml_bid: None,
             ml_confidence: None,
             ml_reasoning: None,

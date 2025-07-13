@@ -17,7 +17,7 @@ use std::str::FromStr;
 struct TenderRecord {
     title: String,
     resource_id: i64,
-    ca: String,
+    contracting_authority: String,
     info: String,
     published: Option<NaiveDateTime>,
     deadline: Option<NaiveDateTime>,
@@ -28,6 +28,11 @@ struct TenderRecord {
     value: Option<BigDecimal>,
     cycle: String,
     bid: Option<i32>, // 1 = bid, 0 = no bid, NULL = unlabeled
+    // Added by subsequent processing stages
+    pdf_content: Option<String>,
+    detected_codes: Option<Vec<String>>, // Added by pdf_processing - actual codes found
+    codes_count: Option<i32>,
+    processing_stage: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -281,7 +286,7 @@ async fn save_records(pool: &Pool<Postgres>, records: &[TenderRecord]) -> Result
         )
         .bind(&record.title)
         .bind(record.resource_id)
-        .bind(&record.ca)
+        .bind(&record.contracting_authority)
         .bind(&record.info)
         .bind(&record.published)
         .bind(&record.deadline)
@@ -483,7 +488,7 @@ impl From<TenderRecordRaw> for TenderRecord {
         Self {
             title: raw.title,
             resource_id: raw.resource_id,
-            ca: raw.ca,
+            contracting_authority: raw.ca,
             info: raw.info,
             published: parse_irish_datetime(&raw.published),
             deadline: parse_irish_datetime(&raw.deadline),
@@ -494,6 +499,11 @@ impl From<TenderRecordRaw> for TenderRecord {
             value: parse_tender_value(&raw.value),
             cycle: raw.cycle,
             bid: None,
+            // Initialize processing pipeline fields
+            pdf_content: None,
+            detected_codes: None,
+            codes_count: None,
+            processing_stage: None,
         }
     }
 }
