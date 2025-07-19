@@ -73,17 +73,16 @@ impl Database {
                 resource_id,
                 title,
                 ca as contracting_authority,
-                description as info,
-                published_date as published,
+                info,
+                published,
                 deadline,
                 procedure,
                 status,
                 pdf_url,
                 awarddate,
-                estimated_value as value,
+                value,
                 cycle,
-                bid,
-                processing_stage
+                bid
             FROM tender_records 
             WHERE resource_id = $1
             "#
@@ -110,7 +109,7 @@ impl Database {
                 pdf_content: None, // Will be populated separately if needed
                 detected_codes: None, // Will be populated from pdf_content table
                 codes_count: None, // Will be populated from pdf_content table
-                processing_stage: row.get("processing_stage"),
+                processing_stage: None, // Runtime field, not stored in database
             };
             
             info!("✅ Found tender record for resource_id: {}", resource_id);
