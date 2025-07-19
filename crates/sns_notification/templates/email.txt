@@ -1,0 +1,43 @@
+IRISH TENDERS NOTIFICATION
+========================
+
+{{subject}}
+
+TENDER DETAILS
+--------------
+Tender ID: {{tender_id}}
+Title: {{tender_title}}
+Contracting Authority: {{contracting_authority}}
+Priority: {{priority}}
+
+{{#if deadline}}
+Deadline: {{deadline}}
+{{/if}}
+
+{{#if estimated_value}}
+Estimated Value: {{estimated_value}}
+{{/if}}
+
+{{#if prediction_confidence}}
+Match Confidence: {{prediction_confidence}}%
+{{/if}}
+
+Notification Time: {{timestamp}}
+
+{{#if summary}}
+AI SUMMARY
+----------
+{{summary}}
+{{/if}}
+
+VIEW FULL TENDER
+---------------
+{{portal_link}}
+
+NOTIFICATION DETAILS
+-------------------
+This is an automated notification from the Irish Tenders AI Analysis System.
+Generated on {{timestamp}}
+
+You are receiving this because you are subscribed to tender notifications.
+To modify your subscription preferences, please contact your system administrator.

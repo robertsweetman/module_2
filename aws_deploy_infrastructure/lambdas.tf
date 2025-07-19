@@ -149,3 +149,30 @@ resource "aws_lambda_function" "ai_summary" {
   timeout = 300  # 5 minutes for AI processing
   memory_size = 512  # Moderate memory for AI API calls
 }
+
+resource "aws_lambda_function" "sns_notification" {
+  function_name = "sns_notification"
+  handler       = "bootstrap"
+  runtime       = "provided.al2"
+  role          = aws_iam_role.lambda_role.arn
+  
+  s3_bucket     = aws_s3_bucket.lambda_bucket.id
+  s3_key        = "sns_notification.zip"
+
+  depends_on = [aws_s3_bucket.lambda_bucket]
+  lifecycle {
+    ignore_changes = [source_code_hash]
+  }
+  
+  environment {
+    variables = {
+      RUST_BACKTRACE = "1"
+      NOTIFICATION_EMAILS = var.notification_emails_str
+      FROM_EMAIL = var.from_email
+      AWS_REGION = var.aws_region
+    }
+  }
+
+  timeout = 60  # 1 minute for email notifications
+  memory_size = 256  # Minimal memory for email sending
+}

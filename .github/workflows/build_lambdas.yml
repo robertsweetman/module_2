@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       lambda:
-        description: "Lambda to build/deploy (all | postgres_dataload | pdf_processing | get_data | ml_bid_predictor | ai_summary)"
+        description: "Lambda to build/deploy (all | postgres_dataload | pdf_processing | get_data | ml_bid_predictor | ai_summary | sns_notification)"
         required: true
         default: "all"
         type: choice
@@ -19,10 +19,12 @@ on:
           - get_data
           - ml_bid_predictor
           - ai_summary
+          - sns_notification
 
 env:
   LAMBDA_BUCKET: ${{ secrets.LAMBDA_BUCKET_NAME }}  # Set this as a GitHub secret
   ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}  # Set this as a GitHub secret
+  NOTIFICATION_EMAILS: ${{ secrets.NOTIFICATION_EMAILS }}  # Set this as a GitHub secret
 
 jobs:
   build-and-deploy:
@@ -86,6 +88,11 @@ jobs:
         run: |
           cargo lambda build --release --target x86_64-unknown-linux-musl --package ai_summary
 
+      - name: Build SNS Notification Lambda
+        if: ${{ inputs.lambda == 'all' || inputs.lambda == 'sns_notification' }}
+        run: |
+          cargo lambda build --release --target x86_64-unknown-linux-musl --package sns_notification
+
       - name: Package Postgres Dataload Lambda
         if: ${{ inputs.lambda == 'all' || inputs.lambda == 'postgres_dataload' }}
         run: |
@@ -121,6 +128,13 @@ jobs:
           zip ai_summary.zip bootstrap
           rm bootstrap
 
+      - name: Package SNS Notification Lambda
+        if: ${{ inputs.lambda == 'all' || inputs.lambda == 'sns_notification' }}
+        run: |
+          cp ./target/lambda/sns_notification/bootstrap ./bootstrap
+          zip sns_notification.zip bootstrap
+          rm bootstrap
+
       - name: Debug - List contents before upload
         run: |
           pwd
@@ -141,7 +155,7 @@ jobs:
           fi
 
       - name: Upload to S3
-        if: ${{ inputs.lambda == 'all' || inputs.lambda == 'postgres_dataload' || inputs.lambda == 'pdf_processing' || inputs.lambda == 'get_data' || inputs.lambda == 'ml_bid_predictor' || inputs.lambda == 'ai_summary' }}
+        if: ${{ inputs.lambda == 'all' || inputs.lambda == 'postgres_dataload' || inputs.lambda == 'pdf_processing' || inputs.lambda == 'get_data' || inputs.lambda == 'ml_bid_predictor' || inputs.lambda == 'ai_summary' || inputs.lambda == 'sns_notification' }}
         run: |
           if [[ "${{ inputs.lambda }}" == "postgres_dataload" || "${{ inputs.lambda }}" == "all" ]]; then
             aws s3 cp postgres_dataload.zip s3://$LAMBDA_BUCKET/postgres_dataload.zip
@@ -158,9 +172,12 @@ jobs:
           if [[ "${{ inputs.lambda }}" == "ai_summary" || "${{ inputs.lambda }}" == "all" ]]; then
             aws s3 cp ai_summary.zip s3://$LAMBDA_BUCKET/ai_summary.zip
           fi
+          if [[ "${{ inputs.lambda }}" == "sns_notification" || "${{ inputs.lambda }}" == "all" ]]; then
+            aws s3 cp sns_notification.zip s3://$LAMBDA_BUCKET/sns_notification.zip
+          fi
 
       - name: Update Lambda Functions
-        if: ${{ inputs.lambda == 'all' || inputs.lambda == 'postgres_dataload' || inputs.lambda == 'pdf_processing' || inputs.lambda == 'get_data' || inputs.lambda == 'ml_bid_predictor' || inputs.lambda == 'ai_summary' }}
+        if: ${{ inputs.lambda == 'all' || inputs.lambda == 'postgres_dataload' || inputs.lambda == 'pdf_processing' || inputs.lambda == 'get_data' || inputs.lambda == 'ml_bid_predictor' || inputs.lambda == 'ai_summary' || inputs.lambda == 'sns_notification' }}
         run: |
           if [[ "${{ inputs.lambda }}" == "postgres_dataload" || "${{ inputs.lambda }}" == "all" ]]; then
             aws lambda update-function-code --function-name postgres_dataload --s3-bucket $LAMBDA_BUCKET --s3-key postgres_dataload.zip
@@ -176,6 +193,9 @@ jobs:
           fi
           if [[ "${{ inputs.lambda }}" == "ai_summary" || "${{ inputs.lambda }}" == "all" ]]; then
             aws lambda update-function-code --function-name ai_summary --s3-bucket $LAMBDA_BUCKET --s3-key ai_summary.zip
+          fi
+          if [[ "${{ inputs.lambda }}" == "sns_notification" || "${{ inputs.lambda }}" == "all" ]]; then
+            aws lambda update-function-code --function-name sns_notification --s3-bucket $LAMBDA_BUCKET --s3-key sns_notification.zip
           fi
 
       - name: Wait for Postgres Dataload Update
@@ -202,3 +222,8 @@ jobs:
         if: ${{ inputs.lambda == 'all' || inputs.lambda == 'ai_summary' }}
         run: |
           aws lambda wait function-updated --function-name ai_summary
+      
+      - name: Wait for SNS Notification Update
+        if: ${{ inputs.lambda == 'all' || inputs.lambda == 'sns_notification' }}
+        run: |
+          aws lambda wait function-updated --function-name sns_notification

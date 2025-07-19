@@ -7,13 +7,20 @@ resource "aws_sns_topic" "ml_predictions" {
   }
 }
 
-# SNS Topic subscription for email notifications (example)
-# You can add email subscriptions here or manage them through AWS Console
-resource "aws_sns_topic_subscription" "email_notification" {
-  count     = length(var.notification_emails) > 0 ? length(var.notification_emails) : 0
+# SNS Topic subscription for lambda notifications
+resource "aws_sns_topic_subscription" "lambda_notification" {
   topic_arn = aws_sns_topic.ml_predictions.arn
-  protocol  = "email"
-  endpoint  = var.notification_emails[count.index]
+  protocol  = "lambda"
+  endpoint  = aws_lambda_function.sns_notification.arn
+}
+
+# Grant SNS permission to invoke the lambda
+resource "aws_lambda_permission" "allow_sns" {
+  statement_id  = "AllowExecutionFromSNS"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.sns_notification.function_name
+  principal     = "sns.amazonaws.com"
+  source_arn    = aws_sns_topic.ml_predictions.arn
 }
 
 # Output the topic ARN for use in other resources

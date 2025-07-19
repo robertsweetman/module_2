@@ -47,3 +47,15 @@ variable "notification_emails" {
   type        = list(string)
   default     = []
 }
+
+variable "notification_emails_str" {
+  description = "Comma-separated string of notification email addresses (for GitHub secrets)"
+  type        = string
+  default     = ""
+}
+
+variable "from_email" {
+  description = "Email address to use as sender for notifications"
+  type        = string
+  default     = "noreply@etenders.ie"
+}

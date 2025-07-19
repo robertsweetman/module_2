@@ -2,7 +2,7 @@ use crate::types::{PdfContent, TenderRecord, Config};
 use sqlx::{Pool, Postgres, Row};
 use anyhow::Result;
 use tracing::{info, debug, warn};
-use chrono::{DateTime, Utc};
+use chrono;
 
 /// Database operations for AI summary processing
 pub struct Database {
