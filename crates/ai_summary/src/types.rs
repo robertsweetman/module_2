@@ -97,7 +97,6 @@ pub struct Config {
     pub database_url: String,
     pub anthropic_api_key: String,
     pub sns_topic_arn: String,
-    pub aws_region: String,
 }
 
 impl Config {
@@ -108,8 +107,7 @@ impl Config {
             anthropic_api_key: std::env::var("ANTHROPIC_API_KEY")
                 .map_err(|_| anyhow::anyhow!("ANTHROPIC_API_KEY not set"))?,
             sns_topic_arn: std::env::var("SNS_TOPIC_ARN")
-                .map_err(|_| anyhow::anyhow!("SNS_TOPIC_ARN not set"))?,
-            aws_region: std::env::var("AWS_REGION").unwrap_or_else(|_| "eu-west-1".to_string()),
+                .map_err(|_| anyhow::anyhow!("SNS_TOPIC_ARN not set"))?
         })
     }
 }
