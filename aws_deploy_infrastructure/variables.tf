@@ -39,3 +39,10 @@ variable "from_email" {
   type        = string
   default     = "etenders-noreply@robertsweetman.com"
 }
+
+variable "anthropic_api_key" {
+  description = "Anthropic API key for AI services"
+  type        = string
+  sensitive   = true
+  # no default - will be provided by github actions
+}
