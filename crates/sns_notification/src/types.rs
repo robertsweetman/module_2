@@ -22,6 +22,16 @@ impl Config {
                 .split(',')
                 .map(|s| s.trim().to_string())
                 .filter(|s| !s.is_empty())
+                .filter(|email| {
+                    // Basic email validation - must contain @ and have text before/after it
+                    if email.contains('@') && email.split('@').count() == 2 {
+                        let parts: Vec<&str> = email.split('@').collect();
+                        !parts[0].is_empty() && !parts[1].is_empty() && parts[1].contains('.')
+                    } else {
+                        eprintln!("WARNING: Invalid email format detected: '{}'", email);
+                        false
+                    }
+                })
                 .collect()
         };
 
@@ -30,6 +40,12 @@ impl Config {
 
         let aws_region = env::var("AWS_REGION")
             .unwrap_or_else(|_| "eu-west-1".to_string());
+
+        // Log the email configuration for debugging
+        eprintln!("Email configuration:");
+        eprintln!("  From email: {}", from_email);
+        eprintln!("  Notification emails: {:?}", notification_emails);
+        eprintln!("  Raw notification emails string: '{}'", notification_emails_str);
 
         Ok(Config {
             notification_emails,
