@@ -84,7 +84,7 @@ impl Database {
                 cycle,
                 bid,
                 processing_stage
-            FROM tenders 
+            FROM tender_records 
             WHERE resource_id = $1
             "#
         )
