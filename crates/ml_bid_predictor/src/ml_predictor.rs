@@ -270,7 +270,7 @@ mod tests {
     #[test]
     fn test_feature_normalization() {
         let predictor = OptimizedBidPredictor::new();
-        let features = [5.0, 1.0, 150.0, 50.0, 0.5, 0.3, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
+        let features = [5.0, 1.0, 150.0, 50.0, 0.5, 0.3, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
         let normalized = predictor.normalize_features(&features);
         
         assert!(normalized[0] <= 1.0); // codes_count normalized
