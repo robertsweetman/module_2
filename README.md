@@ -4,35 +4,6 @@
 
 This is the 'working code' version of Adv Sw Engineering module 2 about designing an ML model and training it. See the page https://robertsweetman.github.io/module_2/ for the current state of the submission document.
 
-## TODO:
-
-### Academic Requirements
-- [ ] Bring in notes from word doc
-- [ ] Read/make my own notes on the rubric
-- [x] Bring in MDdoc setup and pipelines from Module 1
-- [x] Pull data into PostGres DB
-- [x] Store in S3? <- used RDS instead
-- [x] TF s3 bucket and tf state
-- [x] Define schema
-- [x] Document connection and user settings
-- [x] Use github secrets <- transitioned to AWS Secret store, for clarity
-- [x] Add BID column for 'test data' category <- required for all data
-- [x] Bid Y/N <- added manually 
-- [ ] Look at serverless rust options maybe? - https://github.com/featurestoreorg/serverless-ml-course 
-- [x] Print rubric
-- [ ] Write submission document with respect to the rubric notes
-- [ ] Rust model training <- used Python pandas instead, lack of time available to use Rust unfortunately
-- [ ] any data cleaning required? <- Yes, see etenders.ipynb
-- [ ] nulls? Null PDF's?
-- [ ] what other data validation is needed?
-- [ ] document all the data validation steps
-- [ ] look at different comparisons
-- [ ] write up why some were rejected
-- [x] use Polars.rs pipeline <- used Pandas instead, see note ref Python above.
-- [ ] Add AI summary part
-- [ ] Bid confidence, based on training
-- [ ] Reference back to the rubric for marking
-
 ### Processing Pipeline Architecture
 
 #### 🔄 Current Pipeline Flow (WORKING)
@@ -240,9 +211,13 @@ postgres_dataload → pdf_processing → ml_bid_predictor → ai_summary → sns
 aws_backend_bootstrap       - create S3 for tf state backend
 aws_deploy_infrastructure   - deploys lambda's and other resources, uses s3 backend
 crates
- - get_data                 - main postrgesql data-loading pipeline
- - postgres_dataload        - uses sqs to hand off pdf_url to pdf_processing
- - crates/pdf_processing    - processes pdf's from sqs
+ - get_data                 - ~~main postrgesql data-loading pipeline~~ (no longer used)
+ - postgres_dataload        - get data and use sqs to hand off pdf_url to pdf_processing
+ - pdf_processing           - processes pdf's from sqs
+ - ml_bid_predictor         - routes non-pdf bids to ai_summary queue, gets prediction score
+                            - bids with pdfs get ml prediction score then sent to ai_summary queue
+ - ai_summary               - creates ai summary of data, hands off to sns queue
+ - sns_notification         - formats and sends email to nominated recipients
 mcp-server                  - custom mcp server for interrogating the PostgreSQL RDS Db
 mdbook                      - publish to github pages & also pdf export
 python                      - jupyter notebook for data interrogation and cleaning
