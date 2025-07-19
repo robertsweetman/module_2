@@ -92,6 +92,11 @@ impl EmailService {
             return Ok(());
         }
 
+        info!("Preparing to send email:");
+        info!("  From: {}", self.config.from_email);
+        info!("  To: {:?}", recipients);
+        info!("  Subject: {}", subject);
+
         let destination = Destination::builder()
             .set_to_addresses(Some(recipients.to_vec()))
             .build();
@@ -136,6 +141,18 @@ impl EmailService {
             },
             Err(e) => {
                 error!("Failed to send email via SES: {}", e);
+                error!("SES Error details: {:?}", e);
+                
+                // Try to extract more specific error information
+                let error_message = format!("{}", e);
+                if error_message.contains("MessageRejected") {
+                    error!("Email was rejected - check if sender/recipient emails are verified in SES");
+                } else if error_message.contains("Throttling") {
+                    error!("SES rate limit exceeded");
+                } else if error_message.contains("AccessDenied") {
+                    error!("Lambda doesn't have permission to use SES");
+                }
+                
                 Err(anyhow::anyhow!("SES send error: {}", e))
             }
         }
