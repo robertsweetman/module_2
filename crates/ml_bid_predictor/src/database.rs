@@ -24,28 +24,30 @@ impl Database {
     }
 
     async fn ensure_ml_processed_column(&self) -> Result<()> {
-        // Check if column exists
-        let query = r#"
+                // Check if ml_processed column exists
+        let column_exists_query = r#"
             SELECT EXISTS (
-                SELECT 1 
-                FROM information_schema.columns 
-                WHERE table_name = 'tenders' 
+                SELECT 1 FROM information_schema.columns 
+                WHERE table_name = 'tender_records' 
                 AND column_name = 'ml_processed'
             )
         "#;
         
-        let column_exists: bool = sqlx::query_scalar::<_, bool>(query)
+        let column_exists: bool = sqlx::query_scalar::<_, bool>(column_exists_query)
             .fetch_one(&self.pool)
             .await?;
 
         if !column_exists {
-            info!("Adding ml_processed column to tenders table");
-            let alter_query = r#"
-                ALTER TABLE tenders 
-                ADD COLUMN ml_processed VARCHAR(20) DEFAULT NULL;
+            info!("Adding ml_processed column to tender_records table");
+            let add_column_query = r#"
+                ALTER TABLE tender_records 
+                ADD COLUMN ml_processed BOOLEAN DEFAULT FALSE,
+                ADD COLUMN ml_confidence DECIMAL(5,4),
+                ADD COLUMN ml_reasoning TEXT,
+                ADD COLUMN status VARCHAR(20) DEFAULT 'pending'
             "#;
             
-            sqlx::query(alter_query)
+            sqlx::query(add_column_query)
                 .execute(&self.pool)
                 .await
                 .context("Failed to add ml_processed column")?;
@@ -60,15 +62,15 @@ impl Database {
 
     pub async fn update_ml_processed_status(&self, resource_id: &str, status: &str) -> Result<()> {
         let query = r#"
-            UPDATE tenders 
-            SET ml_processed = $1, 
-                updated_at = NOW()
-            WHERE resource_id = $2
+            UPDATE tender_records 
+            SET ml_processed = TRUE,
+                status = $2
+            WHERE resource_id = $1
         "#;
         
         let rows_affected = sqlx::query(query)
-            .bind(status)
             .bind(resource_id)
+            .bind(status)
             .execute(&self.pool)
             .await
             .context("Failed to update ml_processed status")?
@@ -92,7 +94,7 @@ impl Database {
         status: &str
     ) -> Result<()> {
         let query = r#"
-            UPDATE tenders 
+            UPDATE tender_records 
             SET ml_bid = $1,
                 ml_confidence = $2,
                 ml_reasoning = $3,
@@ -141,7 +143,7 @@ impl Database {
                 ml_bid,
                 ml_confidence,
                 ml_reasoning
-            FROM tenders 
+            FROM tender_records 
             WHERE resource_id = $1
         "#;
         
