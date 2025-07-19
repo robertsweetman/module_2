@@ -16,7 +16,6 @@ impl NotificationService {
     /// Create new notification service
     pub async fn new(config: &Config) -> Result<Self> {
         let aws_config = aws_config::defaults(BehaviorVersion::latest())
-            .region(aws_config::Region::new(config.aws_region.clone()))
             .load()
             .await;
         

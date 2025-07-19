@@ -15,10 +15,9 @@ pub struct EmailService {
 impl EmailService {
     pub async fn new(config: &Config) -> Result<Self> {
         let aws_config = aws_config::defaults(BehaviorVersion::latest())
-            .region(config.aws_region.clone())
             .load()
             .await;
-        
+       
         let ses_client = SesClient::new(&aws_config);
         let mut handlebars = Handlebars::new();
         
