@@ -21,7 +21,7 @@ use pdf_processing::{extract_codes, extract_text_from_pdf};
 #[derive(Debug, Serialize, Deserialize, Clone)]
 struct TenderRecord {
     title: String,
-    resource_id: i64,
+    resource_id: i64, // Back to i64 for consistency
     contracting_authority: String,
     info: String,
     published: Option<NaiveDateTime>,
@@ -108,14 +108,14 @@ async fn function_handler(event: LambdaEvent<SqsEvent>) -> Result<Response, Erro
         }
     };
     
-    let resource_id_int = tender_record.resource_id;
+    let resource_id = tender_record.resource_id;
     let pdf_url = tender_record.pdf_url.clone();
     
-    println!("Fresh container processing PDF for resource_id: {}", resource_id_int);
+    println!("Fresh container processing PDF for resource_id: {}", resource_id);
 
     if pdf_url.is_empty() {
         return Ok(Response {
-            resource_id: resource_id_int.to_string(),
+            resource_id: resource_id.to_string(),
             success: false,
             message: "No PDF URL provided".to_string(),
             text_length: None,
@@ -139,7 +139,7 @@ async fn function_handler(event: LambdaEvent<SqsEvent>) -> Result<Response, Erro
         Err(e) => {
             println!("ERROR: DATABASE_URL not found: {:?}", e);
             return Ok(Response {
-                resource_id: resource_id_int.to_string(),
+                resource_id: resource_id.to_string(),
                 success: false,
                 message: format!("DATABASE_URL environment variable not set: {:?}", e),
                 text_length: None,
@@ -164,7 +164,7 @@ async fn function_handler(event: LambdaEvent<SqsEvent>) -> Result<Response, Erro
             Err(e) => {
                 let _ = db_pool.close().await;
                 return Ok(Response {
-                    resource_id: resource_id_int.to_string(),
+                    resource_id: resource_id.to_string(),
                     success: false,
                     message: format!("Failed to download PDF: HTTP {}", e.status().unwrap_or_default()),
                     text_length: None,
@@ -174,7 +174,7 @@ async fn function_handler(event: LambdaEvent<SqsEvent>) -> Result<Response, Erro
         Err(e) => {
             let _ = db_pool.close().await;
             return Ok(Response {
-                resource_id: resource_id_int.to_string(),
+                resource_id: resource_id.to_string(),
                 success: false,
                 message: format!("Failed to send request: {}", e),
                 text_length: None,
@@ -192,7 +192,7 @@ async fn function_handler(event: LambdaEvent<SqsEvent>) -> Result<Response, Erro
         Err(e) => {
             let _ = db_pool.close().await;
             return Ok(Response {
-                resource_id: resource_id_int.to_string(),
+                resource_id: resource_id.to_string(),
                 success: false,
                 message: format!("Failed to extract text from PDF: {}", e),
                 text_length: None,
@@ -210,7 +210,7 @@ async fn function_handler(event: LambdaEvent<SqsEvent>) -> Result<Response, Erro
         Err(e) => {
             let _ = db_pool.close().await;
             return Ok(Response {
-                resource_id: resource_id_int.to_string(),
+                resource_id: resource_id.to_string(),
                 success: false,
                 message: format!("Failed to load codes from S3: {}", e),
                 text_length: Some(pdf_text.len()),
@@ -229,7 +229,7 @@ async fn function_handler(event: LambdaEvent<SqsEvent>) -> Result<Response, Erro
     if let Err(e) = ensure_table_exists(&db_pool).await {
         let _ = db_pool.close().await;
         return Ok(Response {
-            resource_id: resource_id_int.to_string(),
+            resource_id: resource_id.to_string(),
             success: false,
             message: format!("Failed to ensure table exists: {}", e),
             text_length: Some(pdf_text.len()),
@@ -238,9 +238,9 @@ async fn function_handler(event: LambdaEvent<SqsEvent>) -> Result<Response, Erro
     
     // Store in pdf_content table
     println!("Storing PDF content in database");
-    match store_pdf_content_with_codes(&db_pool, resource_id_int, &pdf_text, &detected_codes).await {
+    match store_pdf_content_with_codes(&db_pool, resource_id, &pdf_text, &detected_codes).await {
         Ok(_) => {
-            println!("Successfully stored PDF content for resource_id: {}", resource_id_int);
+            println!("Successfully stored PDF content for resource_id: {}", resource_id);
             let _ = db_pool.close().await;
 
             // Only delete SQS message AFTER successful database storage
@@ -275,7 +275,7 @@ async fn function_handler(event: LambdaEvent<SqsEvent>) -> Result<Response, Erro
 
             // Build success response
             let response = Response {
-                resource_id: resource_id_int.to_string(),
+                resource_id: resource_id.to_string(),
                 success: true,
                 message: "Successfully processed PDF".to_string(),
                 text_length: Some(pdf_text.len()),
@@ -286,14 +286,14 @@ async fn function_handler(event: LambdaEvent<SqsEvent>) -> Result<Response, Erro
             Ok(response)
         },
         Err(e) => {
-            println!("CRITICAL ERROR: Failed to store PDF content for resource_id {}: {}", resource_id_int, e);
+            println!("CRITICAL ERROR: Failed to store PDF content for resource_id {}: {}", resource_id, e);
             let _ = db_pool.close().await;
             
             // DO NOT delete SQS message on database failure - let it retry
             println!("NOT deleting SQS message due to database storage failure - message will retry");
             
             Ok(Response {
-                resource_id: resource_id_int.to_string(),
+                resource_id: resource_id.to_string(),
                 success: false,
                 message: format!("Failed to store PDF content: {}", e),
                 text_length: Some(pdf_text.len()),

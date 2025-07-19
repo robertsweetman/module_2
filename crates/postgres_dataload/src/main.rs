@@ -16,7 +16,7 @@ use std::str::FromStr;
 #[derive(Debug, Serialize, Deserialize, Clone)]
 struct TenderRecord {
     title: String,
-    resource_id: i64,
+    resource_id: i64, // Back to i64 for consistency across pipeline
     contracting_authority: String,
     info: String,
     published: Option<NaiveDateTime>,
@@ -38,7 +38,7 @@ struct TenderRecord {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 struct TenderRecordRaw {
     title: String,
-    resource_id: i64,
+    resource_id: String, // Keep as String for HTML parsing
     ca: String,
     info: String,
     published: String,
@@ -240,7 +240,7 @@ async fn ensure_table_exists(pool: &Pool<Postgres>) -> Result<(), Error> {
         CREATE TABLE IF NOT EXISTS tender_records (
             id SERIAL PRIMARY KEY,
             title TEXT NOT NULL,
-            resource_id TEXT NOT NULL UNIQUE,
+            resource_id BIGINT NOT NULL UNIQUE,
             ca TEXT NOT NULL,
             info TEXT NOT NULL,
             published TIMESTAMP WITHOUT TIME ZONE,
@@ -285,7 +285,7 @@ async fn save_records(pool: &Pool<Postgres>, records: &[TenderRecord]) -> Result
             "#
         )
         .bind(&record.title)
-        .bind(record.resource_id)
+        .bind(record.resource_id) // Back to i64
         .bind(&record.contracting_authority)
         .bind(&record.info)
         .bind(&record.published)
@@ -368,7 +368,7 @@ async fn get_table_content(
                     .next()
                     .map(|n| n.text().collect::<Vec<_>>().join("").trim().to_string())
                     .unwrap_or_default(),
-                resource_id: resource_id.parse::<i64>().unwrap_or(0),
+                resource_id: resource_id, // Keep as String for TenderRecordRaw
                 ca: row
                     .select(&ca_selector)
                     .next()
@@ -432,12 +432,12 @@ fn parse_irish_date(date_str: &str) -> Option<NaiveDate> {
         return None;
     }
     
-    // Parse HTML scraping date format: "24/06/2025 17:24:53"
-    if let Ok(date) = NaiveDate::parse_from_str(date_str, "%d/%m/%Y %H:%M:%S") {
-        return Some(date);
+    // First try to parse as datetime and extract date component
+    if let Some(datetime) = parse_irish_datetime(date_str) {
+        return Some(datetime.date());
     }
     
-    // Fallback formats (just in case)
+    // Fallback formats for date-only strings
     let fallback_formats = [
         "%d/%m/%Y",                 // 25/12/2024
         "%d-%m-%Y",                 // 25-12-2024
@@ -455,8 +455,32 @@ fn parse_irish_date(date_str: &str) -> Option<NaiveDate> {
 }
 
 fn parse_irish_datetime(dt_str: &str) -> Option<NaiveDateTime> {
-    if dt_str.is_empty() { return None; }
-    NaiveDateTime::parse_from_str(dt_str, "%d/%m/%Y %H:%M:%S").ok()
+    if dt_str.is_empty() { 
+        return None; 
+    }
+    
+    // Main format from Irish tenders HTML: "18/07/2025 08:01:00"
+    if let Ok(datetime) = NaiveDateTime::parse_from_str(dt_str, "%d/%m/%Y %H:%M:%S") {
+        return Some(datetime);
+    }
+    
+    // Additional fallback formats
+    let datetime_formats = [
+        "%d/%m/%Y %H:%M",           // Without seconds
+        "%d-%m-%Y %H:%M:%S",        // Dash separator
+        "%d-%m-%Y %H:%M",           // Dash separator without seconds
+        "%Y-%m-%d %H:%M:%S",        // ISO format
+        "%Y-%m-%d %H:%M",           // ISO format without seconds
+    ];
+    
+    for format in &datetime_formats {
+        if let Ok(datetime) = NaiveDateTime::parse_from_str(dt_str, format) {
+            return Some(datetime);
+        }
+    }
+    
+    println!("Warning: Could not parse datetime: '{}'", dt_str);
+    None
 }
 
 fn parse_tender_value(value_str: &str) -> Option<BigDecimal> {
@@ -487,7 +511,7 @@ impl From<TenderRecordRaw> for TenderRecord {
     fn from(raw: TenderRecordRaw) -> Self {
         Self {
             title: raw.title,
-            resource_id: raw.resource_id,
+            resource_id: raw.resource_id.parse::<i64>().unwrap_or(0), // Convert to i64 immediately
             contracting_authority: raw.ca,
             info: raw.info,
             published: parse_irish_datetime(&raw.published),
