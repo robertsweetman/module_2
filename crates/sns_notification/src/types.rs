@@ -42,22 +42,19 @@ impl Config {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct SNSMessage {
     pub message_type: String,
-    pub tender_id: Option<String>,
-    pub tender_title: Option<String>,
-    pub contracting_authority: Option<String>,
+    pub resource_id: String,
+    pub title: String,
     pub priority: String,
-    pub summary: Option<String>,
-    pub prediction_confidence: Option<f64>,
-    pub deadline: Option<DateTime<Utc>>,
-    pub estimated_value: Option<String>,
+    pub summary: String,
+    pub action_required: String,
     pub timestamp: DateTime<Utc>,
-    pub metadata: Option<serde_json::Value>,
+    pub metadata: serde_json::Value,
 }
 
 #[derive(Debug, Serialize, Clone)]
 pub struct EmailData {
     pub subject: String,
-    pub tender_id: String,
+    pub resource_id: String,
     pub tender_title: String,
     pub contracting_authority: String,
     pub summary: String,
@@ -70,36 +67,38 @@ pub struct EmailData {
 }
 
 impl EmailData {
-    pub fn from_sns_message(sns_message: &SNSMessage) -> Self {
-        let tender_id = sns_message.tender_id.clone().unwrap_or_else(|| "Unknown".to_string());
-        let tender_title = sns_message.tender_title.clone().unwrap_or_else(|| "No title available".to_string());
-        let contracting_authority = sns_message.contracting_authority.clone().unwrap_or_else(|| "Unknown Authority".to_string());
-        let summary = sns_message.summary.clone().unwrap_or_else(|| "No summary available".to_string());
-        
-        let subject = match sns_message.priority.as_str() {
-            "URGENT" => format!("🚨 URGENT: New Tender Match - {}", tender_title),
-            "HIGH" => format!("⚡ HIGH PRIORITY: Tender Opportunity - {}", tender_title),
-            _ => format!("📋 New Tender Notification - {}", tender_title),
+    pub fn from_sns_message(msg: &SNSMessage) -> Result<Self, String> {
+        // Parse metadata JSON string to serde_json::Value first
+        let metadata: serde_json::Value = if let serde_json::Value::String(metadata_str) = &msg.metadata {
+            serde_json::from_str(metadata_str)
+                .map_err(|e| format!("Failed to parse metadata string: {}", e))?
+        } else {
+            // If it's already a JSON value, use it directly
+            msg.metadata.clone()
         };
 
-        let deadline = sns_message.deadline
-            .map(|d| d.format("%Y-%m-%d %H:%M UTC").to_string());
-
-        let portal_link = format!("https://etenders.gov.ie/epps/opportunityDetail.do?opportunityId={}", tender_id);
-
-        EmailData {
-            subject,
-            tender_id,
-            tender_title,
-            contracting_authority,
-            summary,
-            priority: sns_message.priority.clone(),
-            prediction_confidence: sns_message.prediction_confidence,
-            deadline,
-            estimated_value: sns_message.estimated_value.clone(),
-            timestamp: sns_message.timestamp.format("%Y-%m-%d %H:%M UTC").to_string(),
-            portal_link,
-        }
+        Ok(EmailData {
+            subject: format!("New High-Priority Tender: {}", msg.title),
+            resource_id: msg.resource_id.clone(),
+            tender_title: msg.title.clone(),
+            contracting_authority: metadata.get("ca")
+                .and_then(|v| v.as_str())
+                .unwrap_or("Unknown Authority")
+                .to_string(),
+            summary: msg.summary.clone(),
+            priority: msg.priority.clone(),
+            prediction_confidence: metadata.get("ml_confidence")
+                .and_then(|v| v.as_f64())
+                .map(|v| v * 100.0), // Convert to percentage
+            deadline: metadata.get("deadline")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string()),
+            estimated_value: metadata.get("value")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string()),
+            timestamp: msg.timestamp.format("%Y-%m-%d %H:%M:%S UTC").to_string(),
+            portal_link: format!("https://etenders.gov.ie/epps/opportunity/opportunityDetailAction.do?opportunityId={}", msg.resource_id),
+        })
     }
 }
 

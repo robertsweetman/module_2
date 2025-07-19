@@ -38,6 +38,7 @@ jobs:
         TF_VAR_db_admin_name: ${{ secrets.DB_ADMIN_NAME }}
         TF_VAR_db_admin_pwd: ${{ secrets.DB_ADMIN_PWD }}
         TF_VAR_anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+        TF_VAR_notification_emails_str: ${{ secrets.NOTIFICATION_EMAILS }}
       run: terraform plan -out=tfplan
 
     - name: Debug Directory Contents
@@ -92,5 +93,6 @@ jobs:
         TF_VAR_db_admin_name: ${{ secrets.DB_ADMIN_NAME }}
         TF_VAR_db_admin_pwd: ${{ secrets.DB_ADMIN_PWD }}
         TF_VAR_anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+        TF_VAR_notification_emails_str: ${{ secrets.NOTIFICATION_EMAILS }}
       working-directory: ./aws_deploy_infrastructure
       run: terraform apply -auto-approve tfplan

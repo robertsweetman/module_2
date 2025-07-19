@@ -101,7 +101,7 @@ impl QueueHandler {
             timestamp: Utc::now(),
             metadata: serde_json::json!({
                 "ca": tender.contracting_authority,
-                "estimated_value": tender.value,
+                "value": tender.value,
                 "deadline": tender.deadline,
                 "ml_confidence": prediction.confidence,
                 "ml_reasoning": prediction.reasoning,

@@ -38,11 +38,11 @@ impl EmailService {
             return Ok(());
         }
 
-        let email_data = EmailData::from_sns_message(sns_message);
+        let email_data = EmailData::from_sns_message(sns_message).map_err(|e| anyhow::anyhow!(e))?;
         let priority = NotificationPriority::from(sns_message.priority.as_str());
 
         info!("Sending {} priority notification for tender: {}", 
-              sns_message.priority, email_data.tender_id);
+              sns_message.priority, email_data.resource_id);
 
         // Generate email content
         let html_body = self.handlebars.render("email_html", &email_data)?;

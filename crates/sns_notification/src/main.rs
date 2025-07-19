@@ -40,7 +40,7 @@ async fn function_handler(event: LambdaEvent<SnsEvent>) -> Result<String, Error>
         info!("Parsed SNS message - Type: {}, Priority: {}, Tender: {}", 
               sns_message.message_type, 
               sns_message.priority,
-              sns_message.tender_id.as_deref().unwrap_or("Unknown"));
+              sns_message.resource_id);
         
         // Send email notification
         email_service.send_notification(&sns_message).await
