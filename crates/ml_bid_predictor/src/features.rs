@@ -6,20 +6,32 @@ use once_cell::sync::Lazy;
 
 /// Feature extractor for tender records
 /// 
-/// Extracts the 14 key features identified as most important:
+/// Extracts the 15 key features identified as most important:
 /// 1. codes_count - Most important predictor
 /// 2. has_codes - Binary indicator  
 /// 3. title_length - Text complexity
 /// 4. ca_encoded - Contracting authority
-/// 5-14. TF-IDF features for key terms
+/// 5. exclusion_score - Non-IT sector filtering (NEW)
+/// 6-15. TF-IDF features for key terms
 pub struct FeatureExtractor {
     term_patterns: Vec<Regex>,
+    exclusion_patterns: Vec<Regex>,
 }
 
 /// Static key terms identified as most predictive for bids
 static KEY_TERMS: &[&str] = &[
     "software", "support", "provision", "computer", "services",
     "systems", "management", "works", "package", "technical"
+];
+
+/// Terms that indicate non-IT projects (construction, civil engineering, etc.)
+static EXCLUSION_TERMS: &[&str] = &[
+    "ground", "investigation", "construction", "building", "road", "bridge",
+    "excavation", "concrete", "steel", "infrastructure", "landscaping",
+    "drainage", "utilities", "geotechnical", "earthworks", "paving",
+    "demolition", "mechanical", "electrical", "plumbing", "hvac",
+    "site", "contractor", "materials", "equipment", "machinery",
+    "civil", "structural", "architectural", "engineering", "survey"
 ];
 
 /// Common contracting authorities mapping for encoding
@@ -49,8 +61,15 @@ impl FeatureExtractor {
             .collect::<Result<Vec<_>, _>>()
             .expect("Failed to compile regex patterns");
 
+        let exclusion_patterns = EXCLUSION_TERMS
+            .iter()
+            .map(|term| Regex::new(&format!(r"(?i)\b{}\b", regex::escape(term))))
+            .collect::<Result<Vec<_>, _>>()
+            .expect("Failed to compile exclusion regex patterns");
+
         Self {
             term_patterns,
+            exclusion_patterns,
         }
     }
     
@@ -69,13 +88,16 @@ impl FeatureExtractor {
         // 4. ca_encoded (contracting authority)
         let ca_encoded = self.encode_contracting_authority(&tender.contracting_authority);
         
-        // 5-14. TF-IDF features for key terms
+        // 5. exclusion_score (non-IT sector filtering - NEW)
         let combined_text = format!(
             "{} {}",
             tender.title,
             tender.pdf_content.as_ref().unwrap_or(&String::new())
         ).to_lowercase();
         
+        let exclusion_score = self.calculate_exclusion_score(&combined_text)?;
+        
+        // 6-15. TF-IDF features for key terms
         let tfidf_features = self.calculate_tfidf_features(&combined_text)?;
         
         Ok(FeatureVector {
@@ -83,6 +105,7 @@ impl FeatureExtractor {
             has_codes,
             title_length,
             ca_encoded,
+            exclusion_score,
             tfidf_software: tfidf_features[0],
             tfidf_support: tfidf_features[1],
             tfidf_provision: tfidf_features[2],
@@ -119,6 +142,26 @@ impl FeatureExtractor {
         
         // Map to reasonable range (11-100) to avoid conflicts with known mappings
         ((hash_value % 90) + 11) as f64
+    }
+    
+    /// Calculate exclusion score for non-IT projects
+    /// Higher score = more likely to be non-IT project (construction, etc.)
+    fn calculate_exclusion_score(&self, text: &str) -> Result<f64> {
+        let word_count = text.split_whitespace().count() as f64;
+        if word_count == 0.0 {
+            return Ok(0.0);
+        }
+        
+        let mut exclusion_matches = 0;
+        for pattern in &self.exclusion_patterns {
+            exclusion_matches += pattern.find_iter(text).count();
+        }
+        
+        // Calculate exclusion density (matches per 100 words)
+        let exclusion_density = (exclusion_matches as f64 / word_count) * 100.0;
+        
+        // Cap at 10.0 for normalization
+        Ok(exclusion_density.min(10.0))
     }
     
     /// Calculate TF-IDF features for key terms

@@ -89,6 +89,7 @@ pub struct FeatureVector {
     pub has_codes: f64,
     pub title_length: f64,
     pub ca_encoded: f64,
+    pub exclusion_score: f64,  // NEW: Non-IT sector filtering
     pub tfidf_software: f64,
     pub tfidf_support: f64,
     pub tfidf_provision: f64,
@@ -102,12 +103,13 @@ pub struct FeatureVector {
 }
 
 impl FeatureVector {
-    pub fn to_array(&self) -> [f64; 14] {
+    pub fn to_array(&self) -> [f64; 15] {
         [
             self.codes_count,
             self.has_codes,
             self.title_length,
             self.ca_encoded,
+            self.exclusion_score,
             self.tfidf_software,
             self.tfidf_support,
             self.tfidf_provision,

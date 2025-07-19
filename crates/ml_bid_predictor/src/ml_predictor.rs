@@ -9,11 +9,12 @@ use tracing::{info, debug};
 /// - Threshold 0.050 captures 95.8% of all bids
 /// - Reduces missed opportunities from £250k to £50k per test batch
 /// - Only 4.2% false negative rate (1 missed bid out of 24)
+/// - NEW: Exclusion filtering for non-IT projects
 pub struct OptimizedBidPredictor {
     threshold: f64,
     feature_extractor: FeatureExtractor,
     // Pre-trained model coefficients (simplified Random Forest as weighted features)
-    feature_weights: [f64; 14],
+    feature_weights: [f64; 15],  // Updated for 15 features
 }
 
 impl OptimizedBidPredictor {
@@ -29,6 +30,7 @@ impl OptimizedBidPredictor {
                 0.15,  // has_codes  
                 0.05,  // title_length
                 0.08,  // ca_encoded
+                -0.50, // exclusion_score (STRONG NEGATIVE for non-IT projects)
                 0.12,  // tfidf_software (highest TF-IDF predictor)
                 0.08,  // tfidf_support
                 0.05,  // tfidf_provision
@@ -58,6 +60,21 @@ impl OptimizedBidPredictor {
         // Extract feature vector
         let features = self.feature_extractor.extract_features(tender)?;
         
+        // HARD EXCLUSION RULE: If exclusion score is very high, skip immediately
+        if features.exclusion_score > 3.0 {
+            let reasoning = format!(
+                "HARD_EXCLUSION: Score {:.1} - Contains strong non-IT indicators (construction/infrastructure/civil engineering). Automatically excluded.",
+                features.exclusion_score
+            );
+            
+            return Ok(MLPredictionResult {
+                should_bid: false,
+                confidence: 0.0, // Set to 0 for hard exclusions
+                reasoning,
+                feature_scores: self.calculate_feature_scores(&features),
+            });
+        }
+        
         // Calculate prediction score using weighted features
         let prediction_score = self.calculate_prediction_score(&features)?;
         
@@ -78,11 +95,12 @@ impl OptimizedBidPredictor {
         };
         
         info!(
-            "🎯 ML Prediction for {}: {} (score: {:.3}, threshold: {:.3})",
+            "🎯 ML Prediction for {}: {} (score: {:.3}, threshold: {:.3}, exclusion: {:.1})",
             tender.resource_id,
             if should_bid { "BID" } else { "NO-BID" },
             prediction_score,
-            self.threshold
+            self.threshold,
+            features.exclusion_score
         );
         
         Ok(result)
@@ -108,28 +126,36 @@ impl OptimizedBidPredictor {
     }
     
     /// Normalize features to 0-1 range based on expected value ranges
-    fn normalize_features(&self, features: &[f64; 14]) -> [f64; 14] {
+    fn normalize_features(&self, features: &[f64; 15]) -> [f64; 15] {
         [
             (features[0] / 20.0).min(1.0),           // codes_count (max ~20)
             features[1],                              // has_codes (already 0/1)
             (features[2] / 200.0).min(1.0),          // title_length (max ~200)
             (features[3] / 100.0).min(1.0),          // ca_encoded (max ~100 CAs)
-            features[4],                              // tfidf_software (already 0-1)
-            features[5],                              // tfidf_support  (already 0-1)
-            features[6],                              // tfidf_provision (already 0-1)
-            features[7],                              // tfidf_computer (already 0-1)
-            features[8],                              // tfidf_services (already 0-1)
-            features[9],                              // tfidf_systems (already 0-1)
-            features[10],                             // tfidf_management (already 0-1)
-            features[11],                             // tfidf_works (already 0-1)
-            features[12],                             // tfidf_package (already 0-1)
-            features[13],                             // tfidf_technical (already 0-1)
+            (features[4] / 10.0).min(1.0),           // exclusion_score (0-10 range)
+            features[5],                              // tfidf_software (already 0-1)
+            features[6],                              // tfidf_support  (already 0-1)
+            features[7],                              // tfidf_provision (already 0-1)
+            features[8],                              // tfidf_computer (already 0-1)
+            features[9],                              // tfidf_services (already 0-1)
+            features[10],                             // tfidf_systems (already 0-1)
+            features[11],                             // tfidf_management (already 0-1)
+            features[12],                             // tfidf_works (already 0-1)
+            features[13],                             // tfidf_package (already 0-1)
+            features[14],                             // tfidf_technical (already 0-1)
         ]
     }
     
     /// Generate human-readable reasoning for the prediction
     fn generate_reasoning(&self, features: &FeatureVector, score: f64, should_bid: bool) -> String {
         let mut reasons = Vec::new();
+        
+        // Check exclusion indicators first (most important for filtering)
+        if features.exclusion_score > 2.0 {
+            reasons.push(format!("🚫 HIGH EXCLUSION SCORE: {:.1} - likely non-IT project (construction/infrastructure)", features.exclusion_score));
+        } else if features.exclusion_score > 1.0 {
+            reasons.push(format!("⚠️ Medium exclusion score: {:.1} - contains some non-IT terms", features.exclusion_score));
+        }
         
         // Check key indicators
         if features.codes_count > 0.0 {
