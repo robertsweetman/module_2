@@ -26,7 +26,7 @@ impl Config {
         };
 
         let from_email = env::var("FROM_EMAIL")
-            .unwrap_or_else(|_| "noreply@etenders.ie".to_string());
+            .unwrap_or_else(|_| "etenders-noreply@robertsweetman.com".to_string());
 
         let aws_region = env::var("AWS_REGION")
             .unwrap_or_else(|_| "eu-west-1".to_string());

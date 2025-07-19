@@ -7,8 +7,3 @@ resource "aws_secretsmanager_secret" "db_credentials" {
   recovery_window_in_days = 0 # allow immediate deletion if necessary
 }
 
-# Optionally seed the secret with an initial JSON payload.  Override via the AWS console later.
-resource "aws_secretsmanager_secret_version" "db_credentials_version" {
-  secret_id     = aws_secretsmanager_secret.db_credentials.id
-  secret_string = var.db_credentials_initial_secret_string
-}

@@ -28,28 +28,8 @@ variable "db_credentials_secret_name" {
   default     = "etenders_rds_credentials"
 }
 
-variable "db_credentials_initial_secret_string" {
-  description = "Initial JSON payload for the DB credentials secret. Override via TF_VAR_... or terraform.tfvars."
-  type        = string
-  default     = <<EOF
-{
-  "host": "your-rds-endpoint.amazonaws.com",
-  "port": 5432,
-  "username": "username",
-  "password": "password",
-  "database": "etenders"
-}
-EOF
-}
-
-variable "notification_emails" {
-  description = "List of email addresses to receive ML prediction notifications"
-  type        = list(string)
-  default     = []
-}
-
 variable "notification_emails_str" {
-  description = "Comma-separated string of notification email addresses (for GitHub secrets)"
+  description = "Comma-separated string of notification email addresses (from GitHub secrets)"
   type        = string
   default     = ""
 }
@@ -57,5 +37,5 @@ variable "notification_emails_str" {
 variable "from_email" {
   description = "Email address to use as sender for notifications"
   type        = string
-  default     = "noreply@etenders.ie"
+  default     = "etenders-noreply@robertsweetman.com"
 }
