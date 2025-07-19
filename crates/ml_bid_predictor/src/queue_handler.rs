@@ -66,8 +66,6 @@ impl QueueHandler {
             .send_message()
             .queue_url(&self.config.ai_summary_queue_url)
             .message_body(message_body)
-            .message_group_id(&format!("tender-{}", tender.resource_id)) // For FIFO queues
-            .message_deduplication_id(&format!("{}:{}", tender.resource_id, Utc::now().timestamp()))
             .send()
             .await?;
         
