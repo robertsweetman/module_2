@@ -60,7 +60,7 @@ impl Database {
         Ok(())
     }
 
-    pub async fn update_ml_processed_status(&self, resource_id: &str, status: &str) -> Result<()> {
+    pub async fn update_ml_processed_status(&self, resource_id: i64, status: &str) -> Result<()> {
         let query = r#"
             UPDATE tender_records 
             SET ml_processed = TRUE,
@@ -87,7 +87,7 @@ impl Database {
 
     pub async fn update_ml_prediction_results(
         &self, 
-        resource_id: &str, 
+        resource_id: i64, 
         ml_bid: bool, 
         ml_confidence: f64,
         ml_reasoning: &str,
@@ -98,7 +98,8 @@ impl Database {
             SET ml_bid = $1,
                 ml_confidence = $2,
                 ml_reasoning = $3,
-                ml_processed = $4,
+                ml_processed = TRUE,
+                status = $4,
                 updated_at = NOW()
             WHERE resource_id = $5
         "#;
@@ -111,7 +112,7 @@ impl Database {
             .bind(resource_id)
             .execute(&self.pool)
             .await
-            .context("Failed to update ML prediction results")?
+            .with_context(|| format!("Failed to update ML prediction results for resource_id: {}", resource_id))?
             .rows_affected();
 
         if rows_affected == 0 {
@@ -124,7 +125,7 @@ impl Database {
         Ok(())
     }
 
-    pub async fn get_tender_by_resource_id(&self, resource_id: &str) -> Result<Option<crate::types::TenderRecord>> {
+    pub async fn get_tender_by_resource_id(&self, resource_id: i64) -> Result<Option<crate::types::TenderRecord>> {
         let query = r#"
             SELECT 
                 resource_id,

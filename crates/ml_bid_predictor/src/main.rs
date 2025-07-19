@@ -82,7 +82,7 @@ async fn process_tender_record(
             
             // Update database with prediction results and set status to 'bid'
             database.update_ml_prediction_results(
-                &tender_record.resource_id.to_string(),
+                tender_record.resource_id,
                 true,
                 prediction.confidence,
                 &prediction.reasoning,
@@ -98,7 +98,7 @@ async fn process_tender_record(
             
             // Update database with prediction results and set status to 'no-bid'
             database.update_ml_prediction_results(
-                &tender_record.resource_id.to_string(),
+                tender_record.resource_id,
                 false,
                 prediction.confidence,
                 &prediction.reasoning,
