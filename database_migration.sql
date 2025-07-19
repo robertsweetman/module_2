@@ -11,6 +11,52 @@ BEGIN
     END IF;
 END $$;
 
+-- Step 1b: Add ML prediction and processing columns
+DO $$ 
+BEGIN
+    -- Add ml_processed column
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                   WHERE table_name = 'tender_records' AND column_name = 'ml_processed') THEN
+        ALTER TABLE tender_records ADD COLUMN ml_processed BOOLEAN DEFAULT FALSE;
+        COMMENT ON COLUMN tender_records.ml_processed IS 'Whether this tender has been processed by ML predictor';
+    END IF;
+    
+    -- Add ml_bid column
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                   WHERE table_name = 'tender_records' AND column_name = 'ml_bid') THEN
+        ALTER TABLE tender_records ADD COLUMN ml_bid BOOLEAN DEFAULT NULL;
+        COMMENT ON COLUMN tender_records.ml_bid IS 'ML prediction: TRUE if we should bid, FALSE if not, NULL if not predicted';
+    END IF;
+    
+    -- Add ml_confidence column
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                   WHERE table_name = 'tender_records' AND column_name = 'ml_confidence') THEN
+        ALTER TABLE tender_records ADD COLUMN ml_confidence DECIMAL(5,4) DEFAULT NULL;
+        COMMENT ON COLUMN tender_records.ml_confidence IS 'ML prediction confidence score (0.0000 to 1.0000)';
+    END IF;
+    
+    -- Add ml_reasoning column
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                   WHERE table_name = 'tender_records' AND column_name = 'ml_reasoning') THEN
+        ALTER TABLE tender_records ADD COLUMN ml_reasoning TEXT DEFAULT NULL;
+        COMMENT ON COLUMN tender_records.ml_reasoning IS 'ML prediction reasoning/explanation';
+    END IF;
+    
+    -- Add status column
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                   WHERE table_name = 'tender_records' AND column_name = 'status') THEN
+        ALTER TABLE tender_records ADD COLUMN status VARCHAR(20) DEFAULT 'pending';
+        COMMENT ON COLUMN tender_records.status IS 'Processing status: pending, bid, no-bid, etc.';
+    END IF;
+    
+    -- Add updated_at column for tracking changes
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                   WHERE table_name = 'tender_records' AND column_name = 'updated_at') THEN
+        ALTER TABLE tender_records ADD COLUMN updated_at TIMESTAMP DEFAULT NOW();
+        COMMENT ON COLUMN tender_records.updated_at IS 'Last update timestamp';
+    END IF;
+END $$;
+
 -- Step 2: Convert date columns from TEXT to DATE
 -- Handle various date formats including timestamps
 
@@ -73,6 +119,9 @@ CREATE INDEX IF NOT EXISTS idx_tender_status ON tender_records(status);
 CREATE INDEX IF NOT EXISTS idx_tender_value ON tender_records(value);
 CREATE INDEX IF NOT EXISTS idx_tender_ca ON tender_records(ca);
 CREATE INDEX IF NOT EXISTS idx_tender_bid ON tender_records(bid);
+CREATE INDEX IF NOT EXISTS idx_tender_ml_processed ON tender_records(ml_processed);
+CREATE INDEX IF NOT EXISTS idx_tender_ml_bid ON tender_records(ml_bid);
+CREATE INDEX IF NOT EXISTS idx_tender_updated_at ON tender_records(updated_at);
 
 -- Step 5: Verify the migration
 SELECT 
@@ -82,10 +131,18 @@ SELECT
     COUNT(awarddate) as award_dates,
     COUNT(value) as valid_values,
     COUNT(bid) as labelled_records,
+    COUNT(ml_processed) as ml_processed_count,
+    COUNT(ml_bid) as ml_predicted_count,
     AVG(value) as avg_value,
     MAX(value) as max_value,
     COUNT(CASE WHEN bid = TRUE THEN 1 END) as positive_labels,
-    COUNT(CASE WHEN bid = FALSE THEN 1 END) as negative_labels
+    COUNT(CASE WHEN bid = FALSE THEN 1 END) as negative_labels,
+    COUNT(CASE WHEN ml_bid = TRUE THEN 1 END) as ml_positive_predictions,
+    COUNT(CASE WHEN ml_bid = FALSE THEN 1 END) as ml_negative_predictions,
+    COUNT(CASE WHEN ml_processed = TRUE THEN 1 END) as ml_processed_records,
+    COUNT(CASE WHEN status = 'bid' THEN 1 END) as bid_status_count,
+    COUNT(CASE WHEN status = 'no-bid' THEN 1 END) as no_bid_status_count,
+    COUNT(CASE WHEN status = 'pending' THEN 1 END) as pending_status_count
 FROM tender_records;
 
 -- Step 5b: Debug query to see original date formats (run BEFORE migration)
