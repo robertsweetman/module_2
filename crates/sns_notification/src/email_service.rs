@@ -93,9 +93,22 @@ impl EmailService {
         }
 
         info!("Preparing to send email:");
-        info!("  From: {}", self.config.from_email);
+        info!("  From: '{}'", self.config.from_email);
         info!("  To: {:?}", recipients);
         info!("  Subject: {}", subject);
+
+        // Validate emails before sending
+        if self.config.from_email.is_empty() || !self.config.from_email.contains('@') {
+            error!("Invalid FROM email: '{}'", self.config.from_email);
+            return Err(anyhow::anyhow!("Invalid FROM email address"));
+        }
+
+        for email in recipients {
+            if email.is_empty() || !email.contains('@') {
+                error!("Invalid recipient email: '{}'", email);
+                return Err(anyhow::anyhow!("Invalid recipient email address"));
+            }
+        }
 
         let destination = Destination::builder()
             .set_to_addresses(Some(recipients.to_vec()))
