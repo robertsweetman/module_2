@@ -37,20 +37,35 @@ impl NotificationService {
         let claude_override = summary_result.processing_notes.iter()
             .any(|note| note.contains("OVERRODE") || note.contains("overrode"));
         
-        // Check Claude's recommendation
-        let claude_recommends_bid = summary_result.recommendation.to_lowercase().contains("bid") && 
-            !summary_result.recommendation.to_lowercase().contains("no bid");
+        // Check Claude's actual recommendation more comprehensively
+        let summary_lower = summary_result.ai_summary.to_lowercase();
+        let recommendation_lower = summary_result.recommendation.to_lowercase();
+        let combined_claude_text = format!("{} {}", summary_lower, recommendation_lower);
         
-        // Only send notifications when:
-        // 1. ML recommends bid AND Claude agrees (or doesn't override)
-        // 2. OR when Claude provides useful analysis without contradicting ML
+        // Claude says NO BID if any of these are true
+        let claude_says_no_bid = combined_claude_text.contains("no bid") ||
+            combined_claude_text.contains("do not bid") ||
+            combined_claude_text.contains("not suitable") ||
+            combined_claude_text.contains("no it requirements") ||
+            combined_claude_text.contains("purely a catering") ||
+            combined_claude_text.contains("this is catering") ||
+            combined_claude_text.contains("medical equipment") ||
+            combined_claude_text.contains("construction work") ||
+            combined_claude_text.contains("architectural services") ||
+            claude_override;
         
+        // Claude says YES BID if recommendation contains bid and not no bid
+        let claude_says_bid = recommendation_lower.contains("bid") && 
+            !recommendation_lower.contains("no bid") && 
+            !recommendation_lower.contains("do not bid");
+        
+        // STRICT FILTERING: Only send notifications when Claude genuinely agrees with bidding
         if ml_prediction.should_bid {
-            // ML wants to bid - only notify if Claude agrees or doesn't override
-            !claude_override || claude_recommends_bid
+            // ML wants to bid - ONLY notify if Claude explicitly agrees AND doesn't say no bid
+            claude_says_bid && !claude_says_no_bid
         } else {
-            // ML doesn't want to bid - only notify for high-value analysis or special cases
-            summary_result.summary_type == "FULL_PDF" && !claude_override
+            // ML doesn't want to bid - very limited notifications for strategic insights only
+            false // For now, don't send any notifications when ML says no bid
         }
     }
     
@@ -93,12 +108,49 @@ impl NotificationService {
             "Review completed AI summary for strategic assessment"
         };
         
-        // Create truncated summary for notification
-        let notification_summary = if summary_result.ai_summary.len() > 500 {
-            format!("{}...\n\n[View complete summary in dashboard]", &summary_result.ai_summary[..500])
-        } else {
-            summary_result.ai_summary.clone()
-        };
+        // Create comprehensive notification with all key details
+        let notification_summary = format!(
+            r#"📋 TENDER SUMMARY:
+{}
+
+🔍 KEY DETAILS:
+• Resource ID: {}
+• Contracting Authority: {}
+• Estimated Value: {}
+• Deadline: {}
+• Status: {}
+• Procedure: {}
+
+📄 DOCUMENTS:
+• PDF URL: {}
+
+🤖 AI ANALYSIS:
+• ML Prediction: {} (confidence: {:.1}%)
+• ML Reasoning: {}
+• Claude Recommendation: {}
+• Claude Confidence: {}
+
+🎯 ACTION REQUIRED:
+{}"#,
+            if summary_result.ai_summary.len() > 800 {
+                format!("{}...\n\n[Truncated - full analysis available in system]", &summary_result.ai_summary[..800])
+            } else {
+                summary_result.ai_summary.clone()
+            },
+            tender.resource_id,
+            tender.contracting_authority,
+            tender.value.as_ref().map(|v| v.to_string()).unwrap_or_else(|| "Not specified".to_string()),
+            tender.deadline.map(|d| d.to_string()).unwrap_or_else(|| "Not specified".to_string()),
+            tender.status,
+            tender.procedure,
+            tender.pdf_url,
+            if ml_prediction.should_bid { "RECOMMEND BID" } else { "DO NOT BID" },
+            ml_prediction.confidence * 100.0,
+            ml_prediction.reasoning,
+            summary_result.recommendation,
+            summary_result.confidence_assessment,
+            action_required
+        );
         
         let sns_message = SNSMessage {
             message_type: "AI_SUMMARY_COMPLETE".to_string(),
@@ -109,6 +161,7 @@ impl NotificationService {
             action_required: action_required.to_string(),
             timestamp: Utc::now(),
             metadata: serde_json::json!({
+                "resource_id": tender.resource_id,
                 "contracting_authority": tender.contracting_authority,
                 "estimated_value": tender.value,
                 "deadline": tender.deadline,
@@ -116,6 +169,7 @@ impl NotificationService {
                 "claude_override": claude_override,
                 "has_non_it_indicators": has_non_it_indicators,
                 "processing_notes": summary_result.processing_notes,
+                "notification_sent": true, // Flag to indicate this was sent as notification
                 "ml_prediction": {
                     "should_bid": ml_prediction.should_bid,
                     "confidence": ml_prediction.confidence,
@@ -136,10 +190,9 @@ impl NotificationService {
     
     /// Send SNS notification
     async fn send_sns_notification(&self, message: &SNSMessage) -> Result<()> {
-        let subject = format!("[{}] AI Summary: {}", 
-                             message.priority, 
-                             if message.title.len() > 50 {
-                                 format!("{}...", &message.title[..50])
+        let subject = format!("Tender Opportunity: {}", 
+                             if message.title.len() > 60 {
+                                 format!("{}...", &message.title[..60])
                              } else {
                                  message.title.clone()
                              });

@@ -123,27 +123,42 @@ async fn process_summary_message(
     if NotificationService::should_send_notification(&summary_result, &ai_message.ml_prediction) {
         info!("📧 Sending notification - Claude and ML are aligned or Claude confirms bid opportunity");
         
+        // Add notification sent flag to processing notes
+        let mut updated_summary = summary_result.clone();
+        updated_summary.processing_notes.push("📧 EMAIL NOTIFICATION SENT - Claude confirmed ML recommendation".to_string());
+        
+        // Store the updated result with notification flag
+        database.store_ai_summary(&updated_summary).await?;
+        
         // Send notification about completed AI summary
         notification_service.send_summary_complete_notification(
             &tender,
-            &summary_result,
+            &updated_summary,
             &ai_message.ml_prediction,
         ).await?;
         
         // Log summary for monitoring
         info!("📋 Summary preview (email sent): {}", 
-              if summary_result.ai_summary.len() > 200 {
-                  format!("{}...", &summary_result.ai_summary[..200])
+              if updated_summary.ai_summary.len() > 200 {
+                  format!("{}...", &updated_summary.ai_summary[..200])
               } else {
-                  summary_result.ai_summary.clone()
+                  updated_summary.ai_summary.clone()
               });
     } else {
         info!("🚫 Suppressing notification - Claude overrode ML recommendation or identified non-IT tender");
+        
+        // Add notification suppressed flag to processing notes
+        let mut updated_summary = summary_result.clone();
+        updated_summary.processing_notes.push("🚫 EMAIL NOTIFICATION SUPPRESSED - Claude overrode ML or identified non-IT tender".to_string());
+        
+        // Store the updated result with suppression flag
+        database.store_ai_summary(&updated_summary).await?;
+        
         info!("📋 Summary preview (no email sent): {}", 
-              if summary_result.ai_summary.len() > 200 {
-                  format!("{}...", &summary_result.ai_summary[..200])
+              if updated_summary.ai_summary.len() > 200 {
+                  format!("{}...", &updated_summary.ai_summary[..200])
               } else {
-                  summary_result.ai_summary.clone()
+                  updated_summary.ai_summary.clone()
               });
     }
     
