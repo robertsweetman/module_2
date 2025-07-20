@@ -37,27 +37,17 @@ impl NotificationService {
         let claude_override = summary_result.processing_notes.iter()
             .any(|note| note.contains("OVERRODE") || note.contains("overrode"));
         
-        // Check Claude's actual recommendation more comprehensively
-        let summary_lower = summary_result.ai_summary.to_lowercase();
+        // Check Claude's explicit recommendation - keep it simple
         let recommendation_lower = summary_result.recommendation.to_lowercase();
-        let combined_claude_text = format!("{} {}", summary_lower, recommendation_lower);
         
-        // Claude says NO BID if any of these are true
-        let claude_says_no_bid = combined_claude_text.contains("no bid") ||
-            combined_claude_text.contains("do not bid") ||
-            combined_claude_text.contains("not suitable") ||
-            combined_claude_text.contains("no it requirements") ||
-            combined_claude_text.contains("purely a catering") ||
-            combined_claude_text.contains("this is catering") ||
-            combined_claude_text.contains("medical equipment") ||
-            combined_claude_text.contains("construction work") ||
-            combined_claude_text.contains("architectural services") ||
+        // Claude says NO BID if it explicitly says so
+        let claude_says_no_bid = recommendation_lower.contains("no bid") ||
+            recommendation_lower.contains("do not bid") ||
             claude_override;
         
-        // Claude says YES BID if recommendation contains bid and not no bid
+        // Claude says YES BID if recommendation contains bid and explicitly doesn't say no bid
         let claude_says_bid = recommendation_lower.contains("bid") && 
-            !recommendation_lower.contains("no bid") && 
-            !recommendation_lower.contains("do not bid");
+            !claude_says_no_bid;
         
         // STRICT FILTERING: Only send notifications when Claude genuinely agrees with bidding
         if ml_prediction.should_bid {
@@ -108,56 +98,91 @@ impl NotificationService {
             "Review completed AI summary for strategic assessment"
         };
         
-        // Create comprehensive notification with all key details
-        let notification_summary = format!(
-            r#"📋 TENDER SUMMARY:
-{}
-
-🔍 KEY DETAILS:
-• Resource ID: {}
-• Contracting Authority: {}
-• Estimated Value: {}
-• Deadline: {}
-• Status: {}
-• Procedure: {}
-
-📄 DOCUMENTS:
-• PDF URL: {}
-
-🤖 AI ANALYSIS:
-• ML Prediction: {} (confidence: {:.1}%)
-• ML Reasoning: {}
-• Claude Recommendation: {}
-• Claude Confidence: {}
-
-🎯 ACTION REQUIRED:
-{}"#,
-            if summary_result.ai_summary.len() > 800 {
-                format!("{}...\n\n[Truncated - full analysis available in system]", &summary_result.ai_summary[..800])
-            } else {
-                summary_result.ai_summary.clone()
-            },
+        // Create clean email notification format
+        let email_body = format!(
+r#"<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {{ font-family: Arial, sans-serif; margin: 20px; }}
+        .header {{ background-color: #f8f9fa; padding: 15px; border-left: 4px solid #007bff; }}
+        .content {{ padding: 20px 0; }}
+        .metadata {{ background-color: #f8f9fa; padding: 15px; margin: 10px 0; }}
+        .ai-summary {{ background-color: #fff3cd; padding: 15px; margin: 10px 0; border-left: 4px solid #ffc107; }}
+        .footer {{ color: #6c757d; font-size: 12px; margin-top: 30px; }}
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h2>{}</h2>
+        <p><strong>{}</strong></p>
+    </div>
+    
+    <div class="content">
+        <div class="metadata">
+            <p><strong>Tender ID:</strong> {}</p>
+            <p><strong>Contracting Authority:</strong> {}</p>
+            <p><strong>Estimated Value:</strong> {}</p>
+            <p><strong>Deadline:</strong> {}</p>
+            <p><strong>Match Confidence:</strong> {:.1}%</p>
+            <p><strong>Notification Time:</strong> {}</p>
+        </div>
+        
+        <div class="ai-summary">
+            <h3>🤖 AI Summary</h3>
+            <p>{}</p>
+            
+            <h4>📋 Key Points</h4>
+            <ul>
+                {}
+            </ul>
+            
+            <h4>💡 Recommendation</h4>
+            <p><strong>{}</strong></p>
+            
+            <h4>🎯 Confidence Assessment</h4>
+            <p>{}</p>
+        </div>
+        
+        <div style="text-align: center; margin: 20px 0;">
+            <a href="{}" style="background-color: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">
+                View PDF Document
+            </a>
+        </div>
+    </div>
+    
+    <div class="footer">
+        <p>This is an automated notification from the Irish Tenders AI Analysis System</p>
+        <p>Generated on {}</p>
+        <p>You are receiving this because you are subscribed to tender notifications. To modify your subscription preferences, please contact your system administrator.</p>
+    </div>
+</body>
+</html>"#,
+            tender.title,
+            tender.contracting_authority,
             tender.resource_id,
             tender.contracting_authority,
             tender.value.as_ref().map(|v| v.to_string()).unwrap_or_else(|| "Not specified".to_string()),
             tender.deadline.map(|d| d.to_string()).unwrap_or_else(|| "Not specified".to_string()),
-            tender.status,
-            tender.procedure,
-            tender.pdf_url,
-            if ml_prediction.should_bid { "RECOMMEND BID" } else { "DO NOT BID" },
             ml_prediction.confidence * 100.0,
-            ml_prediction.reasoning,
+            Utc::now().format("%Y-%m-%d %H:%M:%S UTC"),
+            summary_result.ai_summary,
+            summary_result.key_points.iter()
+                .map(|point| format!("<li>{}</li>", point))
+                .collect::<Vec<_>>()
+                .join(""),
             summary_result.recommendation,
             summary_result.confidence_assessment,
-            action_required
+            tender.pdf_url,
+            Utc::now().format("%Y-%m-%d %H:%M:%S UTC")
         );
-        
+
         let sns_message = SNSMessage {
             message_type: "AI_SUMMARY_COMPLETE".to_string(),
             resource_id: tender.resource_id.to_string(),
             title: tender.title.clone(),
             priority: priority.to_string(),
-            summary: notification_summary,
+            summary: email_body,
             action_required: action_required.to_string(),
             timestamp: Utc::now(),
             metadata: serde_json::json!({
@@ -190,12 +215,7 @@ impl NotificationService {
     
     /// Send SNS notification
     async fn send_sns_notification(&self, message: &SNSMessage) -> Result<()> {
-        let subject = format!("Tender Opportunity: {}", 
-                             if message.title.len() > 60 {
-                                 format!("{}...", &message.title[..60])
-                             } else {
-                                 message.title.clone()
-                             });
+        let subject = "Tender Opportunity".to_string();
         
         let message_body = serde_json::to_string_pretty(message)?;
         

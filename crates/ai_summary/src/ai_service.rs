@@ -51,7 +51,9 @@ ANALYSIS REQUIRED:
 3. Your INDEPENDENT recommendation (you may override the ML prediction)
 4. Confidence assessment noting the limited information available
 
-If this tender is for non-IT services (construction, catering, cleaning, medical, etc.), OVERRIDE the ML prediction and recommend NO BID.
+If this tender is for non-IT services (construction, catering, cleaning, medical, etc.), OVERRIDE the ML prediction and your recommendation MUST be "NO BID".
+
+CRITICAL: Your recommendation field must contain either "BID" or "NO BID" - be explicit and clear.
 
 Format as JSON with fields: summary, key_points (array), recommendation, confidence_assessment"#,
             tender_title,
@@ -122,7 +124,9 @@ COMPREHENSIVE ANALYSIS REQUIRED:
 6. Risk factors and technical considerations
 7. Confidence level in your assessment
 
-OVERRIDE GUIDANCE: If this tender is for non-IT services (construction, catering, cleaning, medical equipment, architectural services, etc.), you should OVERRIDE the ML prediction and recommend NO BID regardless of the ML confidence.
+OVERRIDE GUIDANCE: If this tender is for non-IT services (construction, catering, cleaning, medical equipment, architectural services, etc.), you should OVERRIDE the ML prediction and your recommendation MUST be "NO BID" regardless of the ML confidence.
+
+CRITICAL: Your recommendation field must contain either "BID" or "NO BID" - be explicit and clear.
 
 Format as JSON with fields: summary, key_points (array), recommendation, confidence_assessment"#,
             tender.title,
