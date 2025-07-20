@@ -28,6 +28,32 @@ impl NotificationService {
         })
     }
     
+    /// Determine if notification should be sent based on ML and Claude agreement
+    pub fn should_send_notification(
+        summary_result: &AISummaryResult,
+        ml_prediction: &MLPredictionResult,
+    ) -> bool {
+        // Check if Claude overrode the ML prediction
+        let claude_override = summary_result.processing_notes.iter()
+            .any(|note| note.contains("OVERRODE") || note.contains("overrode"));
+        
+        // Check Claude's recommendation
+        let claude_recommends_bid = summary_result.recommendation.to_lowercase().contains("bid") && 
+            !summary_result.recommendation.to_lowercase().contains("no bid");
+        
+        // Only send notifications when:
+        // 1. ML recommends bid AND Claude agrees (or doesn't override)
+        // 2. OR when Claude provides useful analysis without contradicting ML
+        
+        if ml_prediction.should_bid {
+            // ML wants to bid - only notify if Claude agrees or doesn't override
+            !claude_override || claude_recommends_bid
+        } else {
+            // ML doesn't want to bid - only notify for high-value analysis or special cases
+            summary_result.summary_type == "FULL_PDF" && !claude_override
+        }
+    }
+    
     /// Send notification that AI summary is complete
     pub async fn send_summary_complete_notification(
         &self,
@@ -37,16 +63,32 @@ impl NotificationService {
     ) -> Result<()> {
         info!("📢 Sending AI summary complete notification for: {}", tender.resource_id);
         
-        let priority = if ml_prediction.should_bid {
-            "URGENT"
+        // Check if Claude overrode the ML prediction
+        let claude_override = summary_result.processing_notes.iter()
+            .any(|note| note.contains("OVERRODE") || note.contains("overrode"));
+        
+        let has_non_it_indicators = summary_result.processing_notes.iter()
+            .any(|note| note.contains("NON-IT INDICATOR"));
+        
+        let priority = if claude_override && ml_prediction.should_bid {
+            // This case should rarely happen now due to notification filtering
+            "CRITICAL" // Claude overrode ML's bid recommendation - needs immediate attention
+        } else if ml_prediction.should_bid && !has_non_it_indicators {
+            "URGENT" // ML bid recommendation confirmed by Claude
+        } else if has_non_it_indicators {
+            "MEDIUM" // Has some concerns but not filtered out
         } else if summary_result.summary_type == "FULL_PDF" {
             "HIGH"
         } else {
             "NORMAL"
         };
         
-        let action_required = if ml_prediction.should_bid {
-            "REVIEW IMMEDIATELY: ML recommends bidding on this opportunity"
+        let action_required = if claude_override && ml_prediction.should_bid {
+            "🚨 CRITICAL: Claude AI OVERRODE ML bid recommendation - review immediately for accuracy"
+        } else if ml_prediction.should_bid {
+            "REVIEW IMMEDIATELY: ML recommends bidding - Claude analysis confirms opportunity"
+        } else if has_non_it_indicators {
+            "⚠️ Review recommended: Some non-IT indicators detected but passed initial screening"
         } else {
             "Review completed AI summary for strategic assessment"
         };
@@ -71,6 +113,9 @@ impl NotificationService {
                 "estimated_value": tender.value,
                 "deadline": tender.deadline,
                 "summary_type": summary_result.summary_type,
+                "claude_override": claude_override,
+                "has_non_it_indicators": has_non_it_indicators,
+                "processing_notes": summary_result.processing_notes,
                 "ml_prediction": {
                     "should_bid": ml_prediction.should_bid,
                     "confidence": ml_prediction.confidence,

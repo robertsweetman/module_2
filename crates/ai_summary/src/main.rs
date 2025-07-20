@@ -119,20 +119,33 @@ async fn process_summary_message(
     info!("✅ AI summary completed for resource_id: {} (type: {})", 
           resource_id, summary_result.summary_type);
     
-    // Send notification about completed AI summary
-    notification_service.send_summary_complete_notification(
-        &tender,
-        &summary_result,
-        &ai_message.ml_prediction,
-    ).await?;
-    
-    // Log summary for monitoring
-    info!("📋 Summary preview: {}", 
-          if summary_result.ai_summary.len() > 200 {
-              format!("{}...", &summary_result.ai_summary[..200])
-          } else {
-              summary_result.ai_summary.clone()
-          });
+    // Determine if we should send notification based on ML and Claude agreement
+    if NotificationService::should_send_notification(&summary_result, &ai_message.ml_prediction) {
+        info!("📧 Sending notification - Claude and ML are aligned or Claude confirms bid opportunity");
+        
+        // Send notification about completed AI summary
+        notification_service.send_summary_complete_notification(
+            &tender,
+            &summary_result,
+            &ai_message.ml_prediction,
+        ).await?;
+        
+        // Log summary for monitoring
+        info!("📋 Summary preview (email sent): {}", 
+              if summary_result.ai_summary.len() > 200 {
+                  format!("{}...", &summary_result.ai_summary[..200])
+              } else {
+                  summary_result.ai_summary.clone()
+              });
+    } else {
+        info!("🚫 Suppressing notification - Claude overrode ML recommendation or identified non-IT tender");
+        info!("📋 Summary preview (no email sent): {}", 
+              if summary_result.ai_summary.len() > 200 {
+                  format!("{}...", &summary_result.ai_summary[..200])
+              } else {
+                  summary_result.ai_summary.clone()
+              });
+    }
     
     Ok(())
 }

@@ -29,18 +29,29 @@ impl AIService {
         info!("🤖 Generating title-only AI summary for resource_id: {}", resource_id);
         
         let prompt = format!(
-            r#"You are an expert tender analyst. Based on the limited information provided, provide a concise assessment:
+            r#"You are an expert tender analyst for an IT SERVICE CONSULTANCY specializing in software development, technical support, and IT systems. 
+
+IMPORTANT: You have the authority to OVERRIDE the ML prediction if the tender is clearly outside our IT consultancy scope.
 
 TENDER TITLE: "{}"
 CONTRACTING AUTHORITY: "{}"
 ML PREDICTION: {} (confidence: {:.1}%)
 ML REASONING: {}
 
-Please provide:
-1. A brief summary of what this tender likely involves
-2. Key assessment points based on the title
-3. Your recommendation considering the ML prediction
-4. Confidence assessment noting the limited information
+OUR COMPANY PROFILE:
+- IT Service Consultancy
+- Software development and custom applications
+- Technical support and IT consulting
+- Systems integration and IT infrastructure
+- We DO NOT do: construction, catering, cleaning, medical services, physical security, facilities management, mechanical/electrical work
+
+ANALYSIS REQUIRED:
+1. Does this tender align with IT consultancy services? (Critical assessment)
+2. Brief summary of what this tender involves
+3. Your INDEPENDENT recommendation (you may override the ML prediction)
+4. Confidence assessment noting the limited information available
+
+If this tender is for non-IT services (construction, catering, cleaning, medical, etc.), OVERRIDE the ML prediction and recommend NO BID.
 
 Format as JSON with fields: summary, key_points (array), recommendation, confidence_assessment"#,
             tender_title,
@@ -74,7 +85,9 @@ Format as JSON with fields: summary, key_points (array), recommendation, confide
         let detected_codes_str = pdf_content.detected_codes.join(", ");
         
         let prompt = format!(
-            r#"You are an expert tender analyst. Analyze this complete tender opportunity:
+            r#"You are an expert tender analyst for an IT SERVICE CONSULTANCY specializing in software development, technical support, and IT systems.
+
+IMPORTANT: You have the authority to OVERRIDE the ML prediction if the tender is clearly outside our IT consultancy scope.
 
 TENDER DETAILS:
 Title: "{}"
@@ -93,13 +106,23 @@ CODES COUNT: {}
 ML PREDICTION: {} (confidence: {:.1}%)
 ML REASONING: {}
 
-Please provide a comprehensive analysis including:
-1. Executive summary of the tender opportunity
-2. Key requirements and scope
-3. Assessment of our suitability based on the content
-4. Strategic recommendations
-5. Risk factors and considerations
-6. Confidence level in your assessment
+OUR COMPANY PROFILE:
+- IT Service Consultancy specializing in software development, technical support, IT systems
+- Custom software applications and web development  
+- IT consulting, systems integration, technical support
+- Cloud services, database development, API integrations
+- We DO NOT do: construction, building works, catering, cleaning, medical equipment/services, physical security, facilities management, mechanical/electrical installations, architectural services, surveying, waste management
+
+COMPREHENSIVE ANALYSIS REQUIRED:
+1. SUITABILITY CHECK: Does this tender genuinely align with IT consultancy services? (Critical assessment)
+2. Executive summary of the tender opportunity
+3. Key requirements and technical scope analysis
+4. INDEPENDENT RECOMMENDATION: You may override the ML prediction if this is clearly non-IT
+5. Strategic considerations for our IT consultancy
+6. Risk factors and technical considerations
+7. Confidence level in your assessment
+
+OVERRIDE GUIDANCE: If this tender is for non-IT services (construction, catering, cleaning, medical equipment, architectural services, etc.), you should OVERRIDE the ML prediction and recommend NO BID regardless of the ML confidence.
 
 Format as JSON with fields: summary, key_points (array), recommendation, confidence_assessment"#,
             tender.title,
@@ -170,6 +193,32 @@ Format as JSON with fields: summary, key_points (array), recommendation, confide
             let recommendation = json_response["recommendation"].as_str().unwrap_or("See summary").to_string();
             let confidence_assessment = json_response["confidence_assessment"].as_str().unwrap_or("Moderate confidence").to_string();
             
+            // Check if Claude overrode the ML prediction
+            let mut processing_notes = vec!["Successfully parsed structured Claude response".to_string()];
+            
+            // Look for override indicators in the response
+            let response_lower = response.to_lowercase();
+            if response_lower.contains("override") || response_lower.contains("overrid") {
+                processing_notes.push("⚠️ Claude OVERRODE the ML prediction".to_string());
+                info!("🔄 Claude overrode ML prediction for resource_id: {}", resource_id);
+            }
+            
+            // Check for non-IT keywords in recommendation/summary to flag potential false positives
+            let combined_text = format!("{} {}", summary.to_lowercase(), recommendation.to_lowercase());
+            let non_it_indicators = [
+                "catering", "food service", "cleaning", "maintenance", "construction", 
+                "building work", "architectural", "medical", "healthcare", "security guard",
+                "waste management", "facilities management", "mechanical", "electrical installation",
+                "plumbing", "hvac", "surveying", "legal services", "sewerage", "eeg machine"
+            ];
+            
+            for indicator in &non_it_indicators {
+                if combined_text.contains(indicator) {
+                    processing_notes.push(format!("🚨 NON-IT INDICATOR DETECTED: {}", indicator));
+                    warn!("Non-IT indicator '{}' found in Claude response for resource_id: {}", indicator, resource_id);
+                }
+            }
+            
             Ok(AISummaryResult {
                 resource_id,
                 summary_type: summary_type.to_string(),
@@ -177,7 +226,7 @@ Format as JSON with fields: summary, key_points (array), recommendation, confide
                 key_points,
                 recommendation,
                 confidence_assessment,
-                processing_notes: vec!["Successfully parsed structured Claude response".to_string()],
+                processing_notes,
                 created_at: Utc::now(),
             })
         } else {
