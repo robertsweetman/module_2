@@ -3,44 +3,49 @@ use crate::features::FeatureExtractor;
 use anyhow::Result;
 use tracing::{info, debug};
 
-/// Optimized Bid Predictor using threshold 0.050 for minimal false negatives
+/// Optimized Bid Predictor using threshold 0.054 based on TF-IDF Linear SVM analysis
 /// 
-/// Based on comprehensive analysis showing:
-/// - Threshold 0.050 captures 95.8% of all bids
-/// - Reduces missed opportunities from £250k to £50k per test batch
-/// - Only 4.2% false negative rate (1 missed bid out of 24)
-/// - NEW: Exclusion filtering for non-IT projects
+/// Based on comprehensive analysis from tfidf_linearSVM_pdf_content.ipynb:
+/// - Threshold 0.054 achieves 85.6% recall (catches most bids)
+/// - 16% precision (intentionally high false positives to avoid missing opportunities)
+/// - ONLY used for tenders WITH PDF content
+/// - Strong exclusion filtering for non-IT projects
+/// - More conservative than previous approach to reduce noise
 pub struct OptimizedBidPredictor {
     threshold: f64,
     feature_extractor: FeatureExtractor,
-    // Pre-trained model coefficients (simplified Random Forest as weighted features)
+    // Enhanced feature weights based on TF-IDF + Linear SVM analysis
+    // More conservative to reduce false positives while maintaining recall
     feature_weights: [f64; 15],  // Updated for 15 features
 }
 
 impl OptimizedBidPredictor {
-    /// Create new optimized bid predictor with threshold 0.050
+    /// Create new optimized bid predictor with threshold 0.054
+    /// 
+    /// This predictor should ONLY be used for tenders that have PDF content.
+    /// For tenders without PDF content, route directly to ai_summary for title analysis.
     pub fn new() -> Self {
         Self {
-            threshold: 0.050, // Critical threshold for 95.8% bid capture
+            threshold: 0.054, // From tfidf_linearSVM_pdf_content.ipynb analysis
             feature_extractor: FeatureExtractor::new(),
-            // Feature weights derived from Random Forest analysis
-            // These approximate the most important features from the ML analysis
+            // More conservative feature weights based on TF-IDF + Linear SVM analysis
+            // Reduced positive weights and increased negative exclusion weight
             feature_weights: [
-                0.35,  // codes_count (most important)
-                0.15,  // has_codes  
-                0.05,  // title_length
-                0.08,  // ca_encoded
-                -0.50, // exclusion_score (STRONG NEGATIVE for non-IT projects)
-                0.12,  // tfidf_software (highest TF-IDF predictor)
-                0.08,  // tfidf_support
-                0.05,  // tfidf_provision
-                0.04,  // tfidf_computer
-                0.03,  // tfidf_services
-                0.02,  // tfidf_systems
-                0.01,  // tfidf_management
-                0.01,  // tfidf_works
-                0.005, // tfidf_package
-                0.005, // tfidf_technical
+                0.25,  // codes_count (reduced from 0.35)
+                0.10,  // has_codes (reduced from 0.15)
+                0.02,  // title_length (reduced from 0.05)
+                0.03,  // ca_encoded (reduced from 0.08)
+                -0.80, // exclusion_score (INCREASED negative weight)
+                0.08,  // tfidf_software (reduced from 0.12)
+                0.05,  // tfidf_support (reduced from 0.08)
+                0.03,  // tfidf_provision (reduced from 0.05)
+                0.02,  // tfidf_computer (reduced from 0.04)
+                0.02,  // tfidf_services (reduced from 0.03)
+                0.01,  // tfidf_systems (reduced from 0.02)
+                0.01,  // tfidf_management (unchanged)
+                0.005, // tfidf_works (reduced from 0.01)
+                0.003, // tfidf_package (reduced from 0.005)
+                0.003, // tfidf_technical (reduced from 0.005)
             ],
         }
     }
@@ -51,38 +56,73 @@ impl OptimizedBidPredictor {
         self.threshold
     }
     
-    /// Make ML prediction for a tender record
+    /// Make ML prediction for a tender record with PDF content
+    /// 
+    /// **IMPORTANT**: This predictor should ONLY be called for tenders that have PDF content.
+    /// For tenders without PDF, route directly to ai_summary for title-only analysis.
     /// 
     /// Returns prediction result with confidence score and reasoning
     pub fn predict(&self, tender: &TenderRecord) -> Result<MLPredictionResult> {
         debug!("🤖 Starting ML prediction for: {}", tender.resource_id);
         
+        // Validate that we have PDF content - this is a hard requirement
+        if tender.pdf_content.is_none() || tender.pdf_content.as_ref().unwrap().trim().is_empty() {
+            return Err(anyhow::anyhow!(
+                "ML predictor requires PDF content. Tender {} has no PDF content - route to ai_summary instead.",
+                tender.resource_id
+            ));
+        }
+        
         // Extract feature vector
         let features = self.feature_extractor.extract_features(tender)?;
         
-        // HARD EXCLUSION RULE: If exclusion score is very high, skip immediately
-        if features.exclusion_score > 3.0 {
+        // ENHANCED EXCLUSION RULES: Multiple levels of exclusion
+        
+        // Level 1: HARD EXCLUSION - Very high exclusion score
+        if features.exclusion_score > 4.0 {
             let reasoning = format!(
-                "HARD_EXCLUSION: Score {:.1} - Contains strong non-IT indicators (construction/infrastructure/civil engineering). Automatically excluded.",
+                "HARD_EXCLUSION: Score {:.1} - Strong non-IT indicators (construction/infrastructure/civil engineering). Automatically excluded.",
                 features.exclusion_score
             );
             
             return Ok(MLPredictionResult {
                 should_bid: false,
-                confidence: 0.0, // Set to 0 for hard exclusions
+                confidence: 0.0,
                 reasoning,
                 feature_scores: self.calculate_feature_scores(&features),
             });
         }
         
-        // Calculate prediction score using weighted features
+        // Level 2: SOFT EXCLUSION - High exclusion score + no codes
+        if features.exclusion_score > 2.0 && features.codes_count == 0.0 {
+            let reasoning = format!(
+                "SOFT_EXCLUSION: Score {:.1} with no IT codes - Likely non-IT project without relevant codes.",
+                features.exclusion_score
+            );
+            
+            return Ok(MLPredictionResult {
+                should_bid: false,
+                confidence: 0.01, // Very low confidence
+                reasoning,
+                feature_scores: self.calculate_feature_scores(&features),
+            });
+        }
+        
+        // Level 3: Regular ML prediction with conservative approach
         let prediction_score = self.calculate_prediction_score(&features)?;
         
+        // Apply more conservative threshold adjustment based on exclusion score
+        let adjusted_threshold = if features.exclusion_score > 1.0 {
+            self.threshold * (1.0 + features.exclusion_score * 0.5) // Increase threshold for suspicious content
+        } else {
+            self.threshold
+        };
+        
         // Apply threshold for binary decision
-        let should_bid = prediction_score >= self.threshold;
+        let should_bid = prediction_score >= adjusted_threshold;
         
         // Generate reasoning based on feature contributions
-        let reasoning = self.generate_reasoning(&features, prediction_score, should_bid);
+        let reasoning = self.generate_reasoning(&features, prediction_score, should_bid, adjusted_threshold);
         
         // Calculate feature scores for transparency
         let feature_scores = self.calculate_feature_scores(&features);
@@ -95,11 +135,12 @@ impl OptimizedBidPredictor {
         };
         
         info!(
-            "🎯 ML Prediction for {}: {} (score: {:.3}, threshold: {:.3}, exclusion: {:.1})",
+            "🎯 ML Prediction for {}: {} (score: {:.3}, threshold: {:.3}→{:.3}, exclusion: {:.1})",
             tender.resource_id,
             if should_bid { "BID" } else { "NO-BID" },
             prediction_score,
             self.threshold,
+            adjusted_threshold,
             features.exclusion_score
         );
         
@@ -147,46 +188,61 @@ impl OptimizedBidPredictor {
     }
     
     /// Generate human-readable reasoning for the prediction
-    fn generate_reasoning(&self, features: &FeatureVector, score: f64, should_bid: bool) -> String {
+    fn generate_reasoning(&self, features: &FeatureVector, score: f64, should_bid: bool, threshold: f64) -> String {
         let mut reasons = Vec::new();
         
         // Check exclusion indicators first (most important for filtering)
-        if features.exclusion_score > 2.0 {
-            reasons.push(format!("🚫 HIGH EXCLUSION SCORE: {:.1} - likely non-IT project (construction/infrastructure)", features.exclusion_score));
+        if features.exclusion_score > 3.0 {
+            reasons.push(format!("🚫 VERY HIGH EXCLUSION: {:.1} - strong non-IT project indicators", features.exclusion_score));
+        } else if features.exclusion_score > 2.0 {
+            reasons.push(format!("⚠️ High exclusion score: {:.1} - contains non-IT terms", features.exclusion_score));
         } else if features.exclusion_score > 1.0 {
-            reasons.push(format!("⚠️ Medium exclusion score: {:.1} - contains some non-IT terms", features.exclusion_score));
+            reasons.push(format!("⚠️ Medium exclusion score: {:.1} - some non-IT terms", features.exclusion_score));
         }
         
-        // Check key indicators
+        // Check key positive indicators
         if features.codes_count > 0.0 {
-            reasons.push(format!("Has {} relevant codes", features.codes_count as i32));
+            reasons.push(format!("✅ {} relevant IT codes detected", features.codes_count as i32));
+        } else {
+            reasons.push("❌ No IT codes detected".to_string());
         }
         
         if features.tfidf_software > 0.1 {
-            reasons.push("Contains software-related terms".to_string());
+            reasons.push("✅ Software-related terms found".to_string());
         }
         
         if features.tfidf_support > 0.1 {
-            reasons.push("Contains support service terms".to_string());
+            reasons.push("✅ Support service terms found".to_string());
         }
         
+        // PDF content quality - check title length as proxy
         if features.title_length > 100.0 {
-            reasons.push("Detailed title suggests complex requirements".to_string());
+            reasons.push("✅ Detailed title indicates complex requirements".to_string());
         }
         
-        // Generate final reasoning
+        // Generate final reasoning with threshold information
         let category = if should_bid {
             if score > 0.2 { "HIGH_CONFIDENCE_BID" }
             else if score > 0.1 { "MEDIUM_CONFIDENCE_BID" }
             else { "LOW_CONFIDENCE_BID" }
         } else {
-            "NO_BID_RECOMMENDED"
+            if features.exclusion_score > 2.0 {
+                "EXCLUDED_NON_IT"
+            } else {
+                "NO_BID_RECOMMENDED"
+            }
+        };
+        
+        let threshold_info = if threshold != self.threshold {
+            format!(" (adjusted threshold: {:.3})", threshold)
+        } else {
+            String::new()
         };
         
         if reasons.is_empty() {
-            format!("{}: Score {:.3} below threshold {:.3}", category, score, self.threshold)
+            format!("{}: Score {:.3} vs threshold {:.3}{}", category, score, threshold, threshold_info)
         } else {
-            format!("{}: {} (Score: {:.3})", category, reasons.join(", "), score)
+            format!("{}: {} (Score: {:.3}{})", category, reasons.join(", "), score, threshold_info)
         }
     }
     
@@ -252,7 +308,7 @@ mod tests {
     #[test]
     fn test_predictor_initialization() {
         let predictor = OptimizedBidPredictor::new();
-        assert_eq!(predictor.get_threshold(), 0.050);
+        assert_eq!(predictor.get_threshold(), 0.054);
     }
 
     #[test]

@@ -25,13 +25,48 @@ static KEY_TERMS: &[&str] = &[
 ];
 
 /// Terms that indicate non-IT projects (construction, civil engineering, etc.)
+/// Enhanced list based on common false positives
 static EXCLUSION_TERMS: &[&str] = &[
+    // Construction & Building
     "ground", "investigation", "construction", "building", "road", "bridge",
     "excavation", "concrete", "steel", "infrastructure", "landscaping",
     "drainage", "utilities", "geotechnical", "earthworks", "paving",
-    "demolition", "mechanical", "electrical", "plumbing", "hvac",
+    "demolition", "refurbishment", "renovation", "roofing", "flooring",
+    
+    // Mechanical & Electrical (non-IT)
+    "mechanical", "electrical", "plumbing", "hvac", "heating", "ventilation",
+    "air conditioning", "boiler", "pump", "pipe", "wiring", "circuit",
+    
+    // General Construction
     "site", "contractor", "materials", "equipment", "machinery",
-    "civil", "structural", "architectural", "engineering", "survey"
+    "civil", "structural", "architectural", "survey", "planning",
+    
+    // Medical & Healthcare Services
+    "medical", "healthcare", "nursing", "clinical", "pharmaceutical",
+    "therapy", "treatment", "patient", "hospital", "clinic",
+    
+    // Food & Catering
+    "catering", "food", "kitchen", "dining", "restaurant", "meal",
+    "cooking", "chef", "menu", "nutrition",
+    
+    // Cleaning & Maintenance
+    "cleaning", "maintenance", "janitorial", "waste", "refuse",
+    "hygiene", "sanitization", "pest control",
+    
+    // Transport & Logistics (non-IT)
+    "transport", "logistics", "delivery", "freight", "shipping",
+    "warehouse", "storage", "fleet", "vehicle", "truck",
+    
+    // Legal & Financial Services
+    "legal", "solicitor", "barrister", "audit", "accounting",
+    "insurance", "pension", "investment", "banking",
+    
+    // Security (physical)
+    "security", "guard", "surveillance", "alarm", "cctv", "monitoring",
+    
+    // Energy & Environment
+    "energy", "renewable", "solar", "wind", "environmental",
+    "waste management", "recycling", "sustainability",
 ];
 
 /// Common contracting authorities mapping for encoding
@@ -146,22 +181,52 @@ impl FeatureExtractor {
     
     /// Calculate exclusion score for non-IT projects
     /// Higher score = more likely to be non-IT project (construction, etc.)
+    /// Enhanced scoring with weighted terms and phrase detection
     fn calculate_exclusion_score(&self, text: &str) -> Result<f64> {
         let word_count = text.split_whitespace().count() as f64;
         if word_count == 0.0 {
             return Ok(0.0);
         }
         
-        let mut exclusion_matches = 0;
-        for pattern in &self.exclusion_patterns {
-            exclusion_matches += pattern.find_iter(text).count();
+        let mut exclusion_score = 0.0;
+        
+        // High-weight exclusion indicators (double scoring)
+        let high_weight_terms = [
+            "construction", "building", "road", "bridge", "civil engineering",
+            "mechanical", "electrical", "plumbing", "hvac", "infrastructure",
+            "excavation", "concrete", "steel", "demolition", "refurbishment"
+        ];
+        
+        for term in &high_weight_terms {
+            let pattern = Regex::new(&format!(r"(?i)\b{}\b", regex::escape(term)))?;
+            let matches = pattern.find_iter(text).count() as f64;
+            exclusion_score += matches * 2.0; // Double weight for high-risk terms
         }
         
-        // Calculate exclusion density (matches per 100 words)
-        let exclusion_density = (exclusion_matches as f64 / word_count) * 100.0;
+        // Standard exclusion terms (normal weight)
+        for pattern in &self.exclusion_patterns {
+            exclusion_score += pattern.find_iter(text).count() as f64;
+        }
         
-        // Cap at 10.0 for normalization
-        Ok(exclusion_density.min(10.0))
+        // Check for specific problematic phrases
+        let exclusion_phrases = [
+            "ground investigation", "site investigation", "civil works",
+            "building works", "construction works", "mechanical works",
+            "electrical works", "infrastructure works", "road works",
+            "maintenance works", "repair works", "cleaning services",
+            "security services", "catering services", "transport services"
+        ];
+        
+        for phrase in &exclusion_phrases {
+            let pattern = Regex::new(&format!(r"(?i){}", regex::escape(phrase)))?;
+            exclusion_score += pattern.find_iter(text).count() as f64 * 1.5; // 1.5x weight for phrases
+        }
+        
+        // Calculate exclusion density (matches per 50 words, not 100)
+        let exclusion_density = (exclusion_score / word_count) * 50.0;
+        
+        // Cap at 15.0 for extended range (was 10.0)
+        Ok(exclusion_density.min(15.0))
     }
     
     /// Calculate TF-IDF features for key terms

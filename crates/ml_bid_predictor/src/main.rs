@@ -71,13 +71,30 @@ async fn process_tender_record(
           tender_record.title,
           tender_record.resource_id);
     
-    // Run ML prediction with optimized threshold (0.050)
+    // Validate that this tender has PDF content (this should now be guaranteed by routing)
+    if tender_record.pdf_content.is_none() || tender_record.pdf_content.as_ref().unwrap().trim().is_empty() {
+        let error_msg = format!("ML predictor received tender {} without PDF content - this indicates a routing issue. Tenders without PDF should go directly to AI Summary.", tender_record.resource_id);
+        tracing::error!("{}", error_msg);
+        
+        // Update database to reflect the error
+        database.update_ml_prediction_results(
+            tender_record.resource_id,
+            false,
+            0.0,
+            &error_msg,
+            "routing_error"
+        ).await?;
+        
+        return Err(error_msg.into());
+    }
+    
+    // Run ML prediction with optimized threshold (0.054)
     let prediction = predictor.predict(&tender_record)?;
     
     // Handle prediction result based on confidence
     match prediction.should_bid {
         true => {
-            info!("🎯 RECOMMENDATION: BID (confidence: {:.3}, threshold: 0.050)", 
+            info!("🎯 RECOMMENDATION: BID (confidence: {:.3}, threshold: 0.054)", 
                   prediction.confidence);
             
             // Update database with prediction results and set status to 'bid'
@@ -93,7 +110,7 @@ async fn process_tender_record(
             queue_handler.send_to_ai_summary_queue(&tender_record, &prediction).await?;
         }
         false => {
-            info!("⏭️  RECOMMENDATION: SKIP (confidence: {:.3}, threshold: 0.050)", 
+            info!("⏭️  RECOMMENDATION: SKIP (confidence: {:.3}, threshold: 0.054)", 
                   prediction.confidence);
             
             // Update database with prediction results and set status to 'no-bid'
@@ -117,7 +134,7 @@ async fn main() -> Result<(), Error> {
     // Initialize tracing
     tracing::init_default_subscriber();
     
-    info!("🚀 Starting ML Bid Predictor Lambda (optimized threshold: 0.050)");
+    info!("🚀 Starting ML Bid Predictor Lambda (optimized threshold: 0.054)");
     
     // Run the lambda
     run(service_fn(function_handler)).await

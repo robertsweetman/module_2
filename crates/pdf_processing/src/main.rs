@@ -114,11 +114,29 @@ async fn function_handler(event: LambdaEvent<SqsEvent>) -> Result<Response, Erro
     println!("Fresh container processing PDF for resource_id: {}", resource_id);
 
     if pdf_url.is_empty() {
+        println!("No PDF URL provided - routing to AI Summary for title-only analysis");
+        
+        // Route to AI Summary for title-only analysis
+        tender_record.pdf_content = Some(String::new()); // Empty PDF content
+        tender_record.detected_codes = Some(vec![]); // No codes
+        tender_record.codes_count = Some(0); // Zero codes
+        tender_record.processing_stage = Some("ai_summary_title_only".to_string());
+        
+        if let Err(e) = forward_to_ai_summary(&tender_record).await {
+            println!("WARNING: Failed to forward to AI Summary queue: {}", e);
+            return Ok(Response {
+                resource_id: resource_id.to_string(),
+                success: false,
+                message: format!("No PDF URL and failed to forward to AI Summary: {}", e),
+                text_length: None,
+            });
+        }
+        
         return Ok(Response {
             resource_id: resource_id.to_string(),
-            success: false,
-            message: "No PDF URL provided".to_string(),
-            text_length: None,
+            success: true,
+            message: "No PDF URL - routed to AI Summary for title-only analysis".to_string(),
+            text_length: Some(0),
         });
     }
 
@@ -262,15 +280,35 @@ async fn function_handler(event: LambdaEvent<SqsEvent>) -> Result<Response, Erro
                 }
             }
 
-            // Forward enriched record to ML prediction queue
-            println!("Forwarding enriched record to ML prediction queue");
+            // Update tender record with PDF processing results
             tender_record.pdf_content = Some(pdf_text.clone());
             tender_record.detected_codes = Some(detected_codes.clone());
             tender_record.codes_count = Some(codes_count as i32);
-            tender_record.processing_stage = Some("ml_prediction".to_string());
-            if let Err(e) = forward_to_ml_prediction(&tender_record).await {
-                println!("WARNING: Failed to forward to ML prediction queue: {}", e);
-                // Don't fail the whole process if queue forwarding fails
+            
+            // INTELLIGENT ROUTING: Check PDF content quality to decide next step
+            let pdf_content_length = pdf_text.trim().len();
+            let min_pdf_threshold = 100; // Minimum characters for meaningful ML analysis
+            
+            if pdf_content_length < min_pdf_threshold {
+                // Route directly to AI Summary for title-only analysis
+                println!("PDF content too minimal ({} chars < {} threshold) - routing to AI Summary for title-only analysis", 
+                         pdf_content_length, min_pdf_threshold);
+                
+                tender_record.processing_stage = Some("ai_summary_title_only".to_string());
+                if let Err(e) = forward_to_ai_summary(&tender_record).await {
+                    println!("WARNING: Failed to forward to AI Summary queue: {}", e);
+                    // Don't fail the whole process if queue forwarding fails
+                }
+            } else {
+                // Route to ML prediction first (has substantial PDF content)
+                println!("PDF content substantial ({} chars >= {} threshold) - routing to ML prediction first", 
+                         pdf_content_length, min_pdf_threshold);
+                
+                tender_record.processing_stage = Some("ml_prediction".to_string());
+                if let Err(e) = forward_to_ml_prediction(&tender_record).await {
+                    println!("WARNING: Failed to forward to ML prediction queue: {}", e);
+                    // Don't fail the whole process if queue forwarding fails
+                }
             }
 
             // Build success response
@@ -424,6 +462,64 @@ async fn forward_to_ml_prediction(tender_record: &TenderRecord) -> Result<(), Bo
         },
         Err(e) => {
             println!("Failed to forward record {} to ML prediction queue: {}", 
+                    tender_record.resource_id, e);
+            Err(Box::new(e))
+        }
+    }
+}
+
+async fn forward_to_ai_summary(tender_record: &TenderRecord) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    println!("Forwarding tender record {} to AI Summary queue for title-only analysis", tender_record.resource_id);
+    
+    // Get AI Summary queue URL
+    let ai_queue_url = env::var("AI_SUMMARY_QUEUE_URL")
+        .map_err(|_| "AI_SUMMARY_QUEUE_URL environment variable not set")?;
+    
+    // Initialize SQS client
+    let config = aws_config::defaults(aws_config::BehaviorVersion::latest()).load().await;
+    let sqs_client = SqsClient::new(&config);
+    
+    // Create AI Summary message format
+    // This matches the AISummaryMessage struct expected by ai_summary lambda
+    let ai_message = serde_json::json!({
+        "resource_id": tender_record.resource_id.to_string(),
+        "tender_title": tender_record.title,
+        "ml_prediction": {
+            "should_bid": false, // Default for title-only processing
+            "confidence": 0.0,
+            "reasoning": "Title-only analysis - no PDF content available",
+            "feature_scores": {
+                "codes_count_score": 0.0,
+                "has_codes_score": 0.0,
+                "title_length_score": 0.0,
+                "ca_score": 0.0,
+                "text_features_score": 0.0,
+                "total_score": 0.0
+            }
+        },
+        "pdf_content": tender_record.pdf_content.as_ref().unwrap_or(&String::new()).clone(),
+        "priority": "NORMAL", // Title-only gets normal priority
+        "timestamp": chrono::Utc::now().to_rfc3339()
+    });
+    
+    let message_body = ai_message.to_string();
+    
+    // Send message
+    match sqs_client
+        .send_message()
+        .queue_url(&ai_queue_url)
+        .message_body(message_body)
+        .send()
+        .await
+    {
+        Ok(resp) => {
+            println!("Successfully forwarded record {} to AI Summary queue (message ID: {})", 
+                    tender_record.resource_id, 
+                    resp.message_id().unwrap_or_default());
+            Ok(())
+        },
+        Err(e) => {
+            println!("Failed to forward record {} to AI Summary queue: {}", 
                     tender_record.resource_id, e);
             Err(Box::new(e))
         }
