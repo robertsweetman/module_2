@@ -33,30 +33,67 @@ impl NotificationService {
         summary_result: &AISummaryResult,
         ml_prediction: &MLPredictionResult,
     ) -> bool {
-        // Check if Claude overrode the ML prediction
+        // Enhanced Claude override detection
         let claude_override = summary_result.processing_notes.iter()
-            .any(|note| note.contains("OVERRODE") || note.contains("overrode"));
+            .any(|note| {
+                let note_lower = note.to_lowercase();
+                note_lower.contains("overrode") || 
+                note_lower.contains("override") ||
+                note_lower.contains("overriding")
+            });
         
-        // Check Claude's explicit recommendation - keep it simple
+        // Enhanced recommendation analysis
         let recommendation_lower = summary_result.recommendation.to_lowercase();
+        let ai_summary_lower = summary_result.ai_summary.to_lowercase();
         
-        // Claude says NO BID if it explicitly says so
-        let claude_says_no_bid = recommendation_lower.contains("no bid") ||
-            recommendation_lower.contains("do not bid") ||
-            claude_override;
+        // Multiple ways Claude might say NO BID
+        let no_bid_indicators = [
+            "no bid", "do not bid", "don't bid", "not bid", "avoid bid",
+            "not suitable", "not appropriate", "not relevant", "outside scope",
+            "non-it", "not it", "not technical", "unrelated", "irrelevant",
+            "construction", "catering", "cleaning", "medical", "school meals",
+            "facilities", "maintenance", "security", "transport", "logistics"
+        ];
         
-        // Claude says YES BID if recommendation contains bid and explicitly doesn't say no bid
-        let claude_says_bid = recommendation_lower.contains("bid") && 
-            !claude_says_no_bid;
+        let claude_says_no_bid = no_bid_indicators.iter().any(|&indicator| {
+            recommendation_lower.contains(indicator) || ai_summary_lower.contains(indicator)
+        }) || claude_override;
+        
+        // Multiple ways Claude might say YES BID
+        let yes_bid_indicators = [
+            "bid", "recommend", "pursue", "suitable", "relevant", "appropriate",
+            "it consultancy", "software", "technical", "systems"
+        ];
+        
+        let claude_says_bid = yes_bid_indicators.iter().any(|&indicator| {
+            recommendation_lower.contains(indicator)
+        }) && !claude_says_no_bid;
+        
+        // Enhanced logging for debugging
+        info!("🔍 Notification filtering analysis:");
+        info!("   ML prediction: {} (confidence: {:.1}%)", 
+              if ml_prediction.should_bid { "BID" } else { "NO-BID" }, 
+              ml_prediction.confidence * 100.0);
+        info!("   Claude recommendation: '{}'", summary_result.recommendation);
+        info!("   Claude override detected: {}", claude_override);
+        info!("   Claude says NO BID: {}", claude_says_no_bid);
+        info!("   Claude says YES BID: {}", claude_says_bid);
         
         // STRICT FILTERING: Only send notifications when Claude genuinely agrees with bidding
-        if ml_prediction.should_bid {
+        let should_notify = if ml_prediction.should_bid {
             // ML wants to bid - ONLY notify if Claude explicitly agrees AND doesn't say no bid
-            claude_says_bid && !claude_says_no_bid
+            let notify = claude_says_bid && !claude_says_no_bid;
+            info!("   ML=BID case: notify={} (claude_says_bid={} && !claude_says_no_bid={})", 
+                  notify, claude_says_bid, !claude_says_no_bid);
+            notify
         } else {
             // ML doesn't want to bid - very limited notifications for strategic insights only
-            false // For now, don't send any notifications when ML says no bid
-        }
+            info!("   ML=NO-BID case: notify=false (ML doesn't recommend bidding)");
+            false
+        };
+        
+        info!("   FINAL DECISION: {}", if should_notify { "SEND NOTIFICATION" } else { "SUPPRESS NOTIFICATION" });
+        should_notify
     }
     
     /// Send notification that AI summary is complete

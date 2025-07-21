@@ -46,8 +46,10 @@ static EXCLUSION_TERMS: &[&str] = &[
     "therapy", "treatment", "patient", "hospital", "clinic",
     
     // Food & Catering
-    "catering", "food", "kitchen", "dining", "restaurant", "meal",
-    "cooking", "chef", "menu", "nutrition",
+    "catering", "food", "kitchen", "dining", "restaurant", "meal", "meals",
+    "cooking", "chef", "menu", "nutrition", "breakfast", "lunch", "dinner",
+    "school meals", "meal service", "food service", "food provision", 
+    "breakfast provision", "lunch provision", "catering service",
     
     // Cleaning & Maintenance
     "cleaning", "maintenance", "janitorial", "waste", "refuse",
@@ -214,7 +216,9 @@ impl FeatureExtractor {
             "building works", "construction works", "mechanical works",
             "electrical works", "infrastructure works", "road works",
             "maintenance works", "repair works", "cleaning services",
-            "security services", "catering services", "transport services"
+            "security services", "catering services", "transport services", 
+            "school meals", "meal service", "food service", "breakfast provision",
+            "lunch provision", "dinner provision", "catering service", "food provision"
         ];
         
         for phrase in &exclusion_phrases {

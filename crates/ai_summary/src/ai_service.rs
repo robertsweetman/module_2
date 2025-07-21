@@ -51,9 +51,9 @@ ANALYSIS REQUIRED:
 3. Your INDEPENDENT recommendation (you may override the ML prediction)
 4. Confidence assessment noting the limited information available
 
-If this tender is for non-IT services (construction, catering, cleaning, medical, etc.), OVERRIDE the ML prediction and your recommendation MUST be "NO BID".
+If this tender is for non-IT services (construction, catering, cleaning, medical, school meals, etc.), OVERRIDE the ML prediction and your recommendation MUST be "NO BID".
 
-CRITICAL: Your recommendation field must contain either "BID" or "NO BID" - be explicit and clear.
+CRITICAL: Your recommendation field must contain either "BID" or "NO BID" - be explicit and clear. If this is not an IT consultancy opportunity, you MUST say "NO BID".
 
 Format as JSON with fields: summary, key_points (array), recommendation, confidence_assessment"#,
             tender_title,
@@ -124,9 +124,9 @@ COMPREHENSIVE ANALYSIS REQUIRED:
 6. Risk factors and technical considerations
 7. Confidence level in your assessment
 
-OVERRIDE GUIDANCE: If this tender is for non-IT services (construction, catering, cleaning, medical equipment, architectural services, etc.), you should OVERRIDE the ML prediction and your recommendation MUST be "NO BID" regardless of the ML confidence.
+OVERRIDE GUIDANCE: If this tender is for non-IT services (construction, catering, cleaning, medical equipment, architectural services, school meals, etc.), you should OVERRIDE the ML prediction and your recommendation MUST be "NO BID" regardless of the ML confidence.
 
-CRITICAL: Your recommendation field must contain either "BID" or "NO BID" - be explicit and clear.
+CRITICAL: Your recommendation field must contain either "BID" or "NO BID" - be explicit and clear. If this is not an IT consultancy opportunity, you MUST say "NO BID".
 
 Format as JSON with fields: summary, key_points (array), recommendation, confidence_assessment"#,
             tender.title,
@@ -213,7 +213,8 @@ Format as JSON with fields: summary, key_points (array), recommendation, confide
                 "catering", "food service", "cleaning", "maintenance", "construction", 
                 "building work", "architectural", "medical", "healthcare", "security guard",
                 "waste management", "facilities management", "mechanical", "electrical installation",
-                "plumbing", "hvac", "surveying", "legal services", "sewerage", "eeg machine"
+                "plumbing", "hvac", "surveying", "legal services", "sewerage", "eeg machine",
+                "school meals", "breakfast provision", "lunch provision", "meal service"
             ];
             
             for indicator in &non_it_indicators {
@@ -221,6 +222,20 @@ Format as JSON with fields: summary, key_points (array), recommendation, confide
                     processing_notes.push(format!("🚨 NON-IT INDICATOR DETECTED: {}", indicator));
                     warn!("Non-IT indicator '{}' found in Claude response for resource_id: {}", indicator, resource_id);
                 }
+            }
+            
+            // Enhanced NO BID detection in Claude's response
+            let no_bid_patterns = [
+                "no bid", "do not bid", "don't bid", "not bid", "avoid bid",
+                "not suitable", "not appropriate", "not relevant", "outside scope",
+                "non-it", "not it related", "not technical", "unrelated", "irrelevant"
+            ];
+            
+            let claude_says_no = no_bid_patterns.iter().any(|&pattern| combined_text.contains(pattern));
+            
+            if claude_says_no {
+                processing_notes.push("🚫 Claude RECOMMENDS NO BID - Non-IT opportunity".to_string());
+                info!("🚫 Claude recommends NO BID for resource_id: {} - '{}'", resource_id, recommendation);
             }
             
             Ok(AISummaryResult {
