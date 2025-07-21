@@ -91,40 +91,24 @@ async fn process_tender_record(
     // Run ML prediction with optimized threshold (0.054)
     let prediction = predictor.predict(&tender_record)?;
     
-    // Handle prediction result based on confidence
-    match prediction.should_bid {
-        true => {
-            info!("🎯 RECOMMENDATION: BID (confidence: {:.3}, threshold: 0.054)", 
-                  prediction.confidence);
-            
-            // Update database with prediction results and set status to 'bid'
-            database.update_ml_prediction_results(
-                tender_record.resource_id,
-                true,
-                prediction.confidence,
-                &prediction.reasoning,
-                "bid"
-            ).await?;
-            
-            // Send to AI summary queue for further analysis (also sends SNS notification)
-            queue_handler.send_to_ai_summary_queue(&tender_record, &prediction).await?;
-        }
-        false => {
-            info!("⏭️  RECOMMENDATION: SKIP (confidence: {:.3}, threshold: 0.054)", 
-                  prediction.confidence);
-            
-            // Update database with prediction results and set status to 'no-bid'
-            database.update_ml_prediction_results(
-                tender_record.resource_id,
-                false,
-                prediction.confidence,
-                &prediction.reasoning,
-                "no-bid"
-            ).await?;
-            
-            // Just log for monitoring - no queue/notification needed for skips
-        }
-    }
+    // Always send ALL predictions to AI queue for Claude analysis (eliminate blind spots)
+    info!("📊 ML ANALYSIS: {} (confidence: {:.3}) - sending to Claude for verification", 
+          if prediction.should_bid { "BID" } else { "SKIP" }, 
+          prediction.confidence);
+    
+    // Update database with prediction results
+    database.update_ml_prediction_results(
+        tender_record.resource_id,
+        prediction.should_bid,
+        prediction.confidence,
+        &prediction.reasoning,
+        if prediction.should_bid { "bid" } else { "no-bid" }
+    ).await?;
+    
+    // Send ALL predictions to AI queue - Claude will make the final decision
+    // This eliminates blind spots where ML might miss good opportunities
+    info!("🧠 Sending to Claude for expert analysis (ML is just initial filter)");
+    queue_handler.send_to_ai_summary_queue(&tender_record, &prediction).await?;
     
     Ok(())
 }

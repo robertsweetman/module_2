@@ -2,7 +2,7 @@ use crate::types::{SNSMessage, Config, AISummaryResult, TenderRecord, MLPredicti
 use aws_sdk_sns::Client as SnsClient;
 use aws_config::BehaviorVersion;
 use anyhow::Result;
-use tracing::{info, debug};
+use tracing::{info, debug, warn};
 use chrono::Utc;
 use serde_json;
 
@@ -28,85 +28,96 @@ impl NotificationService {
         })
     }
     
-    /// Determine if notification should be sent based on ML and Claude agreement
+    /// Determine if notification should be sent - Claude is now the primary decision maker
     pub fn should_send_notification(
         summary_result: &AISummaryResult,
-        ml_prediction: &MLPredictionResult,
+        _ml_prediction: &MLPredictionResult, // ML is now just informational - Claude decides
     ) -> bool {
-        // Enhanced Claude override detection
-        let claude_override = summary_result.processing_notes.iter()
-            .any(|note| {
-                let note_lower = note.to_lowercase();
-                note_lower.contains("overrode") || 
-                note_lower.contains("override") ||
-                note_lower.contains("overriding")
-            });
+        info!("🔍 Notification decision analysis (Claude-first approach):");
         
-        // Enhanced recommendation analysis
+        // PRIMARY DECISION: Claude's recommendation (Claude is the final arbiter)
         let recommendation_lower = summary_result.recommendation.to_lowercase();
         let ai_summary_lower = summary_result.ai_summary.to_lowercase();
         
-        // Multiple ways Claude might say NO BID
-        let no_bid_indicators = [
-            "no bid", "do not bid", "don't bid", "not bid", "avoid bid",
-            "not suitable", "not appropriate", "not relevant", "outside scope",
-            "non-it", "not it", "not technical", "unrelated", "irrelevant",
-            "construction", "catering", "cleaning", "medical", "school meals",
-            "facilities", "maintenance", "security", "transport", "logistics"
-        ];
+        // Look for explicit BID recommendation from Claude
+        let claude_says_bid = recommendation_lower.contains("bid") && !recommendation_lower.contains("no bid");
         
-        let claude_says_no_bid = no_bid_indicators.iter().any(|&indicator| {
-            recommendation_lower.contains(indicator) || ai_summary_lower.contains(indicator)
-        }) || claude_override;
-        
-        // Multiple ways Claude might say YES BID
-        let yes_bid_indicators = [
-            "bid", "recommend", "pursue", "suitable", "relevant", "appropriate",
-            "it consultancy", "software", "technical", "systems"
-        ];
-        
-        let claude_says_bid = yes_bid_indicators.iter().any(|&indicator| {
-            recommendation_lower.contains(indicator)
-        }) && !claude_says_no_bid;
-        
-        // Enhanced logging for debugging
-        info!("🔍 Notification filtering analysis:");
-        info!("   ML prediction: {} (confidence: {:.1}%)", 
-              if ml_prediction.should_bid { "BID" } else { "NO-BID" }, 
-              ml_prediction.confidence * 100.0);
         info!("   Claude recommendation: '{}'", summary_result.recommendation);
-        info!("   Claude override detected: {}", claude_override);
-        info!("   Claude says NO BID: {}", claude_says_no_bid);
-        info!("   Claude says YES BID: {}", claude_says_bid);
+        info!("   Claude says BID: {}", claude_says_bid);
         
-        // Add confidence threshold check - don't send notifications for low confidence ML predictions
-        let ml_confidence_threshold = 0.50; // 50% minimum confidence
-        let ml_confidence_too_low = ml_prediction.confidence < ml_confidence_threshold;
-        
-        if ml_confidence_too_low {
-            info!("   ❌ ML confidence {:.1}% is below threshold {:.1}% - suppressing notification", 
-                  ml_prediction.confidence * 100.0, ml_confidence_threshold * 100.0);
+        if !claude_says_bid {
+            info!("   ❌ SUPPRESSED: Claude does not recommend BID");
+            return false;
         }
         
-        // STRICT FILTERING: Only send notifications when Claude genuinely agrees with bidding AND ML confidence is adequate
-        let should_notify = if ml_prediction.should_bid && !ml_confidence_too_low {
-            // ML wants to bid with adequate confidence - ONLY notify if Claude explicitly agrees AND doesn't say no bid
-            let notify = claude_says_bid && !claude_says_no_bid;
-            info!("   ML=BID+HIGH_CONF case: notify={} (claude_says_bid={} && !claude_says_no_bid={})", 
-                  notify, claude_says_bid, !claude_says_no_bid);
-            notify
-        } else if ml_prediction.should_bid && ml_confidence_too_low {
-            // ML wants to bid but confidence too low - suppress
-            info!("   ML=BID+LOW_CONF case: notify=false (confidence too low)");
-            false
-        } else {
-            // ML doesn't want to bid - very limited notifications for strategic insights only
-            info!("   ML=NO-BID case: notify=false (ML doesn't recommend bidding)");
-            false
-        };
+        // ENHANCED NON-IT DETECTION: Look for non-IT indicators in Claude's analysis
+        let combined_text = format!("{} {} {}", 
+                                   ai_summary_lower,
+                                   recommendation_lower,
+                                   summary_result.key_points.join(" ").to_lowercase());
         
-        info!("   FINAL DECISION: {}", if should_notify { "SEND NOTIFICATION" } else { "SUPPRESS NOTIFICATION" });
-        should_notify
+        // Comprehensive non-IT keywords (strict filtering)
+        let non_it_keywords = [
+            // Construction & Building
+            "construction", "building work", "renovation", "refurbishment", "extension", 
+            "architectural", "structural", "civil engineering", "building maintenance",
+            
+            // Catering & Food Services  
+            "catering", "food service", "school meals", "breakfast", "lunch", "dinner",
+            "meal provision", "kitchen", "dining", "food preparation", "canteen",
+            
+            // Cleaning & Maintenance
+            "cleaning", "cleaning service", "janitorial", "housekeeping", "grounds maintenance",
+            "facilities management", "waste management", "refuse collection",
+            
+            // Medical & Healthcare
+            "medical", "healthcare", "clinical", "hospital", "patient", "medical equipment",
+            "eeg machine", "medical device", "health service", "medical supply",
+            
+            // Physical Security & Safety
+            "security guard", "security service", "cctv installation", "access control installation",
+            "physical security", "patrol", "security personnel", "safety equipment",
+            
+            // Utilities & Infrastructure  
+            "plumbing", "electrical installation", "heating", "ventilation", "hvac",
+            "water supply", "sewerage", "drainage", "utilities", "gas installation",
+            
+            // Professional Services (Non-IT)
+            "legal service", "accounting", "surveying", "architectural service", 
+            "hr service", "recruitment", "legal advice", "financial advice",
+            
+            // Transport & Logistics
+            "transport", "delivery", "logistics", "fleet management", "vehicle maintenance"
+        ];
+        
+        let detected_non_it: Vec<&str> = non_it_keywords.iter()
+            .filter(|&&keyword| combined_text.contains(keyword))
+            .copied()
+            .collect();
+        
+        if !detected_non_it.is_empty() {
+            warn!("🚨 NON-IT INDICATORS DETECTED: {:?}", detected_non_it);
+            info!("   ❌ SUPPRESSED: Non-IT keywords found in Claude analysis");
+            return false;
+        }
+        
+        // Enhanced NO BID pattern detection
+        let no_bid_patterns = [
+            "no bid", "do not bid", "don't bid", "not suitable", "not appropriate",
+            "not relevant", "outside scope", "non-it", "not it related", "not technical",
+            "unrelated", "irrelevant", "avoid", "reject", "not recommended"
+        ];
+        
+        let claude_says_no = no_bid_patterns.iter().any(|&pattern| combined_text.contains(pattern));
+        
+        if claude_says_no {
+            info!("   ❌ SUPPRESSED: Claude indicates NO BID in analysis");
+            return false;
+        }
+        
+        // FINAL DECISION: Send notification only if Claude clearly recommends BID with no red flags
+        info!("   ✅ APPROVED: Claude recommends BID with no red flags detected");
+        true
     }
     
     /// Send notification that AI summary is complete

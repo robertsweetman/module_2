@@ -70,8 +70,13 @@ async fn process_summary_message(
     let ai_message: AISummaryMessage = serde_json::from_str(message_body)?;
     let resource_id: i64 = ai_message.resource_id.parse()?;
     
-    info!("📋 Processing summary for resource_id: {}, priority: {}", 
-          resource_id, ai_message.priority);
+    info!("📋 Processing summary for resource_id: {}, priority: {}, ML confidence: {:.1}%", 
+          resource_id, ai_message.priority, ai_message.ml_prediction.confidence * 100.0);
+    
+    // NOTE: No longer filtering by ML confidence - Claude will make the final decision
+    // This ensures we don't miss any potentially good opportunities due to ML blind spots
+    info!("🧠 Sending ALL predictions to Claude for expert analysis (ML confidence: {:.1}%)", 
+          ai_message.ml_prediction.confidence * 100.0);
     
     // Get tender record for context (needed for both processing paths and notification)
     let tender = database.get_tender_record(resource_id).await?

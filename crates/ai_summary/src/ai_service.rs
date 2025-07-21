@@ -31,29 +31,44 @@ impl AIService {
         let prompt = format!(
             r#"You are an expert tender analyst for an IT SERVICE CONSULTANCY specializing in software development, technical support, and IT systems. 
 
-IMPORTANT: You have the authority to OVERRIDE the ML prediction if the tender is clearly outside our IT consultancy scope.
+🚨 CRITICAL: You are the FINAL DECISION MAKER. The ML prediction is just a rough filter - you have full authority to override it.
+
+🚨 DEFAULT TO "NO BID" unless this is CLEARLY an IT consultancy opportunity. We get too many false positives.
 
 TENDER TITLE: "{}"
 CONTRACTING AUTHORITY: "{}"
-ML PREDICTION: {} (confidence: {:.1}%)
+ML PREDICTION: {} (confidence: {:.1}% - treat as unreliable)
 ML REASONING: {}
 
-OUR COMPANY PROFILE:
-- IT Service Consultancy
-- Software development and custom applications
-- Technical support and IT consulting
-- Systems integration and IT infrastructure
-- We DO NOT do: construction, catering, cleaning, medical services, physical security, facilities management, mechanical/electrical work
+🎯 OUR STRICT IT CONSULTANCY SCOPE:
+✅ SOFTWARE DEVELOPMENT: Custom applications, web development, mobile apps
+✅ IT CONSULTING: Systems analysis, technical architecture, IT strategy
+✅ TECHNICAL SUPPORT: IT helpdesk, system administration, technical maintenance
+✅ SYSTEMS INTEGRATION: API development, database design, cloud services
+✅ IT INFRASTRUCTURE: Network setup, server configuration, cybersecurity
 
-ANALYSIS REQUIRED:
-1. Does this tender align with IT consultancy services? (Critical assessment)
-2. Brief summary of what this tender involves
-3. Your INDEPENDENT recommendation (you may override the ML prediction)
-4. Confidence assessment noting the limited information available
+🚫 WE ABSOLUTELY DO NOT DO:
+❌ CONSTRUCTION & BUILDING: Any physical building work, renovations, extensions
+❌ CATERING & FOOD: School meals, catering services, food provision, kitchen equipment
+❌ CLEANING & MAINTENANCE: Cleaning services, grounds maintenance, facilities management  
+❌ MEDICAL & HEALTHCARE: Medical equipment, healthcare services, clinical supplies
+❌ PHYSICAL SECURITY: Security guards, CCTV installation, access control systems
+❌ UTILITIES & INFRASTRUCTURE: Water, sewerage, electrical installation, plumbing, HVAC
+❌ PROFESSIONAL SERVICES: Legal, accounting, architectural, surveying, consulting (non-IT)
+❌ SUPPLIES & EQUIPMENT: Office supplies, furniture, vehicles, non-IT equipment
 
-If this tender is for non-IT services (construction, catering, cleaning, medical, school meals, etc.), OVERRIDE the ML prediction and your recommendation MUST be "NO BID".
+🔍 ANALYSIS REQUIRED:
+1. 🚨 IMMEDIATE REJECTION CHECK: Is this obviously non-IT? (construction, catering, cleaning, medical, etc.)
+2. IT SCOPE VERIFICATION: Does this genuinely require IT consultancy expertise?
+3. RISK ASSESSMENT: Could this be a false positive from keyword matching?
+4. FINAL RECOMMENDATION: BID only if this is clearly within our IT consultancy scope
 
-CRITICAL: Your recommendation field must contain either "BID" or "NO BID" - be explicit and clear. If this is not an IT consultancy opportunity, you MUST say "NO BID".
+⚠️ OVERRIDE GUIDANCE: 
+- If you see ANY non-IT keywords (construction, catering, cleaning, medical, security guards, etc.), OVERRIDE to "NO BID"
+- If the tender scope is unclear or ambiguous, OVERRIDE to "NO BID" 
+- Only recommend "BID" if you are confident this is genuine IT consultancy work
+
+🎯 RESPONSE FORMAT: Your recommendation field MUST contain either "BID" or "NO BID" - be explicit and conservative.
 
 Format as JSON with fields: summary, key_points (array), recommendation, confidence_assessment"#,
             tender_title,
@@ -89,7 +104,9 @@ Format as JSON with fields: summary, key_points (array), recommendation, confide
         let prompt = format!(
             r#"You are an expert tender analyst for an IT SERVICE CONSULTANCY specializing in software development, technical support, and IT systems.
 
-IMPORTANT: You have the authority to OVERRIDE the ML prediction if the tender is clearly outside our IT consultancy scope.
+🚨 CRITICAL: You are the FINAL DECISION MAKER. The ML prediction is just a rough filter - you have full authority to override it.
+
+🚨 DEFAULT TO "NO BID" unless this is CLEARLY an IT consultancy opportunity. We get too many false positives.
 
 TENDER DETAILS:
 Title: "{}"
@@ -105,28 +122,44 @@ PDF CONTENT:
 DETECTED PROCUREMENT CODES: {}
 CODES COUNT: {}
 
-ML PREDICTION: {} (confidence: {:.1}%)
+ML PREDICTION: {} (confidence: {:.1}% - treat as unreliable)
 ML REASONING: {}
 
-OUR COMPANY PROFILE:
-- IT Service Consultancy specializing in software development, technical support, IT systems
-- Custom software applications and web development  
-- IT consulting, systems integration, technical support
-- Cloud services, database development, API integrations
-- We DO NOT do: construction, building works, catering, cleaning, medical equipment/services, physical security, facilities management, mechanical/electrical installations, architectural services, surveying, waste management
+🎯 OUR STRICT IT CONSULTANCY SCOPE:
+✅ SOFTWARE DEVELOPMENT: Custom applications, web development, mobile apps, databases
+✅ IT CONSULTING: Systems analysis, technical architecture, IT strategy, digital transformation
+✅ TECHNICAL SUPPORT: IT helpdesk, system administration, technical maintenance, user training
+✅ SYSTEMS INTEGRATION: API development, database design, cloud services, software integration
+✅ IT INFRASTRUCTURE: Network setup, server configuration, cybersecurity, IT procurement
 
-COMPREHENSIVE ANALYSIS REQUIRED:
-1. SUITABILITY CHECK: Does this tender genuinely align with IT consultancy services? (Critical assessment)
-2. Executive summary of the tender opportunity
-3. Key requirements and technical scope analysis
-4. INDEPENDENT RECOMMENDATION: You may override the ML prediction if this is clearly non-IT
-5. Strategic considerations for our IT consultancy
-6. Risk factors and technical considerations
-7. Confidence level in your assessment
+🚫 WE ABSOLUTELY DO NOT DO:
+❌ CONSTRUCTION & BUILDING: Any physical building work, renovations, extensions, refurbishments
+❌ CATERING & FOOD: School meals, catering services, food provision, kitchen equipment, dining services
+❌ CLEANING & MAINTENANCE: Cleaning services, grounds maintenance, facilities management, janitorial
+❌ MEDICAL & HEALTHCARE: Medical equipment, healthcare services, clinical supplies, patient care
+❌ PHYSICAL SECURITY: Security guards, CCTV installation, access control systems, patrol services
+❌ UTILITIES & INFRASTRUCTURE: Water, sewerage, electrical installation, plumbing, HVAC, heating
+❌ PROFESSIONAL SERVICES: Legal, accounting, architectural, surveying, HR, non-IT consulting
+❌ SUPPLIES & EQUIPMENT: Office supplies, furniture, vehicles, non-IT equipment, stationery
+❌ TRANSPORT & LOGISTICS: Vehicle services, delivery, transport, fleet management
+❌ WASTE MANAGEMENT: Waste collection, recycling, environmental services
 
-OVERRIDE GUIDANCE: If this tender is for non-IT services (construction, catering, cleaning, medical equipment, architectural services, school meals, etc.), you should OVERRIDE the ML prediction and your recommendation MUST be "NO BID" regardless of the ML confidence.
+🔍 COMPREHENSIVE ANALYSIS:
+1. 🚨 IMMEDIATE REJECTION CHECK: Scan for obvious non-IT indicators in title and content
+2. CONTENT DEEP DIVE: Analyze the full PDF content for hidden non-IT requirements
+3. PROCUREMENT CODES: Evaluate if codes indicate non-IT procurement categories
+4. SCOPE VERIFICATION: Does this genuinely require IT consultancy expertise?
+5. FALSE POSITIVE ASSESSMENT: Could this be a keyword false positive?
+6. FINAL EXPERT JUDGMENT: Apply human-level reasoning to the decision
 
-CRITICAL: Your recommendation field must contain either "BID" or "NO BID" - be explicit and clear. If this is not an IT consultancy opportunity, you MUST say "NO BID".
+⚠️ OVERRIDE GUIDANCE - BE EXTREMELY CONSERVATIVE:
+- If you see ANY non-IT keywords in title or content, OVERRIDE to "NO BID"
+- If procurement codes suggest non-IT categories, OVERRIDE to "NO BID"
+- If the tender scope includes ANY physical work/services, OVERRIDE to "NO BID"
+- If requirements are unclear or ambiguous, OVERRIDE to "NO BID"
+- Only recommend "BID" if you are highly confident this is pure IT consultancy work
+
+🎯 RESPONSE REQUIREMENT: Your recommendation field MUST contain either "BID" or "NO BID" - be explicit and extremely conservative.
 
 Format as JSON with fields: summary, key_points (array), recommendation, confidence_assessment"#,
             tender.title,

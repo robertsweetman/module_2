@@ -71,10 +71,9 @@ impl QueueHandler {
         
         info!("✅ Sent to AI summary queue: {}", tender.resource_id);
         
-        // Also send immediate SNS notification if it's a predicted bid
-        if prediction.should_bid {
-            self.send_bid_prediction_alert(tender, prediction).await?;
-        }
+        // NOTE: Removed immediate SNS notification - AI summary service will handle 
+        // notifications after applying proper confidence threshold (50%) and Claude analysis
+        info!("📋 AI summary service will evaluate confidence threshold and send notification if appropriate");
         
         Ok(())
     }
