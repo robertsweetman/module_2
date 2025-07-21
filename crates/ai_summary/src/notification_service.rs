@@ -98,91 +98,12 @@ impl NotificationService {
             "Review completed AI summary for strategic assessment"
         };
         
-        // Create clean email notification format
-        let email_body = format!(
-r#"<!DOCTYPE html>
-<html>
-<head>
-    <style>
-        body {{ font-family: Arial, sans-serif; margin: 20px; }}
-        .header {{ background-color: #f8f9fa; padding: 15px; border-left: 4px solid #007bff; }}
-        .content {{ padding: 20px 0; }}
-        .metadata {{ background-color: #f8f9fa; padding: 15px; margin: 10px 0; }}
-        .ai-summary {{ background-color: #fff3cd; padding: 15px; margin: 10px 0; border-left: 4px solid #ffc107; }}
-        .footer {{ color: #6c757d; font-size: 12px; margin-top: 30px; }}
-    </style>
-</head>
-<body>
-    <div class="header">
-        <h2>{}</h2>
-        <p><strong>{}</strong></p>
-    </div>
-    
-    <div class="content">
-        <div class="metadata">
-            <p><strong>Tender ID:</strong> {}</p>
-            <p><strong>Contracting Authority:</strong> {}</p>
-            <p><strong>Estimated Value:</strong> {}</p>
-            <p><strong>Deadline:</strong> {}</p>
-            <p><strong>Match Confidence:</strong> {:.1}%</p>
-            <p><strong>Notification Time:</strong> {}</p>
-        </div>
-        
-        <div class="ai-summary">
-            <h3>🤖 AI Summary</h3>
-            <p>{}</p>
-            
-            <h4>📋 Key Points</h4>
-            <ul>
-                {}
-            </ul>
-            
-            <h4>💡 Recommendation</h4>
-            <p><strong>{}</strong></p>
-            
-            <h4>🎯 Confidence Assessment</h4>
-            <p>{}</p>
-        </div>
-        
-        <div style="text-align: center; margin: 20px 0;">
-            <a href="{}" style="background-color: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">
-                View PDF Document
-            </a>
-        </div>
-    </div>
-    
-    <div class="footer">
-        <p>This is an automated notification from the Irish Tenders AI Analysis System</p>
-        <p>Generated on {}</p>
-        <p>You are receiving this because you are subscribed to tender notifications. To modify your subscription preferences, please contact your system administrator.</p>
-    </div>
-</body>
-</html>"#,
-            tender.title,
-            tender.contracting_authority,
-            tender.resource_id,
-            tender.contracting_authority,
-            tender.value.as_ref().map(|v| v.to_string()).unwrap_or_else(|| "Not specified".to_string()),
-            tender.deadline.map(|d| d.to_string()).unwrap_or_else(|| "Not specified".to_string()),
-            ml_prediction.confidence * 100.0,
-            Utc::now().format("%Y-%m-%d %H:%M:%S UTC"),
-            summary_result.ai_summary,
-            summary_result.key_points.iter()
-                .map(|point| format!("<li>{}</li>", point))
-                .collect::<Vec<_>>()
-                .join(""),
-            summary_result.recommendation,
-            summary_result.confidence_assessment,
-            tender.pdf_url,
-            Utc::now().format("%Y-%m-%d %H:%M:%S UTC")
-        );
-
         let sns_message = SNSMessage {
             message_type: "AI_SUMMARY_COMPLETE".to_string(),
             resource_id: tender.resource_id.to_string(),
             title: tender.title.clone(),
             priority: priority.to_string(),
-            summary: email_body,
+            summary: summary_result.ai_summary.clone(), // Simple text summary for email service to format
             action_required: action_required.to_string(),
             timestamp: Utc::now(),
             metadata: serde_json::json!({
@@ -194,18 +115,20 @@ r#"<!DOCTYPE html>
                 "claude_override": claude_override,
                 "has_non_it_indicators": has_non_it_indicators,
                 "processing_notes": summary_result.processing_notes,
-                "notification_sent": true, // Flag to indicate this was sent as notification
+                "notification_sent": true,
                 "ml_prediction": {
                     "should_bid": ml_prediction.should_bid,
                     "confidence": ml_prediction.confidence,
                     "reasoning": ml_prediction.reasoning
                 },
+                "ai_summary": summary_result.ai_summary,
                 "key_points": summary_result.key_points,
                 "recommendation": summary_result.recommendation,
                 "confidence_assessment": summary_result.confidence_assessment,
                 "pdf_url": tender.pdf_url,
                 "status": tender.status,
-                "procedure": tender.procedure
+                "procedure": tender.procedure,
+                "portal_link": format!("https://etenders.gov.ie/epps/opportunity/opportunityDetailAction.do?opportunityId={}", tender.resource_id)
             }),
         };
         

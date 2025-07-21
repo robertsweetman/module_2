@@ -130,7 +130,7 @@
         <div class="tender-details">
             <div class="detail-row">
                 <span class="detail-label">Tender ID:</span>
-                <span class="detail-value">{{tender_id}}</span>
+                <span class="detail-value">{{resource_id}}</span>
             </div>
             <div class="detail-row">
                 <span class="detail-label">Contracting Authority:</span>
@@ -165,15 +165,43 @@
             </div>
         </div>
 
-        {{#if summary}}
+        {{#if ai_summary}}
         <div class="summary-section">
             <div class="summary-title">🤖 AI Summary</div>
-            <p>{{summary}}</p>
+            <p>{{ai_summary}}</p>
+            
+            {{#if key_points}}
+            <h4>📋 Key Points</h4>
+            <ul>
+                {{#each key_points}}
+                <li>{{this}}</li>
+                {{/each}}
+            </ul>
+            {{/if}}
+            
+            {{#if recommendation}}
+            <h4>💡 Recommendation</h4>
+            <p><strong>{{recommendation}}</strong></p>
+            {{/if}}
+            
+            {{#if confidence_assessment}}
+            <h4>🎯 Confidence Assessment</h4>
+            <p>{{confidence_assessment}}</p>
+            {{/if}}
+            
+            {{#if ml_reasoning}}
+            <h4>🔍 ML Analysis</h4>
+            <p><em>{{ml_reasoning}}</em></p>
+            {{/if}}
         </div>
         {{/if}}
 
         <div style="text-align: center;">
             <a href="{{portal_link}}" class="cta-button">View Full Tender Details →</a>
+            {{#if pdf_url}}
+            <br><br>
+            <a href="{{pdf_url}}" class="cta-button" style="background-color: #28a745;">View PDF Document →</a>
+            {{/if}}
         </div>
 
         <div class="footer">

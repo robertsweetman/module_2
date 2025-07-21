@@ -80,6 +80,12 @@ pub struct EmailData {
     pub estimated_value: Option<String>,
     pub timestamp: String,
     pub portal_link: String,
+    pub ai_summary: String,
+    pub key_points: Vec<String>,
+    pub recommendation: String,
+    pub confidence_assessment: String,
+    pub pdf_url: Option<String>,
+    pub ml_reasoning: Option<String>,
 }
 
 impl EmailData {
@@ -94,26 +100,56 @@ impl EmailData {
         };
 
         Ok(EmailData {
-            subject: format!("New High-Priority Tender: {}", msg.title),
+            subject: "Tender Opportunity".to_string(), // Fixed header as requested
             resource_id: msg.resource_id.clone(),
             tender_title: msg.title.clone(),
-            contracting_authority: metadata.get("ca")
+            contracting_authority: metadata.get("contracting_authority")
                 .and_then(|v| v.as_str())
                 .unwrap_or("Unknown Authority")
                 .to_string(),
             summary: msg.summary.clone(),
             priority: msg.priority.clone(),
-            prediction_confidence: metadata.get("ml_confidence")
+            prediction_confidence: metadata.get("ml_prediction")
+                .and_then(|ml| ml.get("confidence"))
                 .and_then(|v| v.as_f64())
                 .map(|v| v * 100.0), // Convert to percentage
             deadline: metadata.get("deadline")
                 .and_then(|v| v.as_str())
                 .map(|s| s.to_string()),
-            estimated_value: metadata.get("value")
+            estimated_value: metadata.get("estimated_value")
                 .and_then(|v| v.as_str())
                 .map(|s| s.to_string()),
             timestamp: msg.timestamp.format("%Y-%m-%d %H:%M:%S UTC").to_string(),
-            portal_link: format!("https://etenders.gov.ie/epps/opportunity/opportunityDetailAction.do?opportunityId={}", msg.resource_id),
+            portal_link: metadata.get("portal_link")
+                .and_then(|v| v.as_str())
+                .unwrap_or(&format!("https://etenders.gov.ie/epps/opportunity/opportunityDetailAction.do?opportunityId={}", msg.resource_id))
+                .to_string(),
+            ai_summary: metadata.get("ai_summary")
+                .and_then(|v| v.as_str())
+                .unwrap_or(&msg.summary)
+                .to_string(),
+            key_points: metadata.get("key_points")
+                .and_then(|v| v.as_array())
+                .map(|arr| arr.iter()
+                    .filter_map(|item| item.as_str())
+                    .map(|s| s.to_string())
+                    .collect())
+                .unwrap_or_else(|| vec!["See summary for details".to_string()]),
+            recommendation: metadata.get("recommendation")
+                .and_then(|v| v.as_str())
+                .unwrap_or("See summary")
+                .to_string(),
+            confidence_assessment: metadata.get("confidence_assessment")
+                .and_then(|v| v.as_str())
+                .unwrap_or("Assessment pending")
+                .to_string(),
+            pdf_url: metadata.get("pdf_url")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string()),
+            ml_reasoning: metadata.get("ml_prediction")
+                .and_then(|ml| ml.get("reasoning"))
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string()),
         })
     }
 }

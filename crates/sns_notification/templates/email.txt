@@ -5,7 +5,7 @@ IRISH TENDERS NOTIFICATION
 
 TENDER DETAILS
 --------------
-Tender ID: {{tender_id}}
+Tender ID: {{resource_id}}
 Title: {{tender_title}}
 Contracting Authority: {{contracting_authority}}
 Priority: {{priority}}
@@ -24,15 +24,47 @@ Match Confidence: {{prediction_confidence}}%
 
 Notification Time: {{timestamp}}
 
-{{#if summary}}
+{{#if ai_summary}}
 AI SUMMARY
 ----------
-{{summary}}
+{{ai_summary}}
+
+{{#if key_points}}
+KEY POINTS
+----------
+{{#each key_points}}
+• {{this}}
+{{/each}}
+{{/if}}
+
+{{#if recommendation}}
+RECOMMENDATION
+--------------
+{{recommendation}}
+{{/if}}
+
+{{#if confidence_assessment}}
+CONFIDENCE ASSESSMENT
+--------------------
+{{confidence_assessment}}
+{{/if}}
+
+{{#if ml_reasoning}}
+ML ANALYSIS
+-----------
+{{ml_reasoning}}
+{{/if}}
 {{/if}}
 
 VIEW FULL TENDER
 ---------------
 {{portal_link}}
+
+{{#if pdf_url}}
+VIEW PDF DOCUMENT
+-----------------
+{{pdf_url}}
+{{/if}}
 
 NOTIFICATION DETAILS
 -------------------
