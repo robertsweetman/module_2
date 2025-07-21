@@ -99,6 +99,14 @@ impl EmailData {
             msg.metadata.clone()
         };
 
+        // Debug logging to see what we're working with
+        eprintln!("🔍 SNS Message Debug:");
+        eprintln!("   Summary: '{}'", msg.summary);
+        eprintln!("   Metadata keys: {:?}", metadata.as_object().map(|obj| obj.keys().collect::<Vec<_>>()));
+        eprintln!("   AI Summary from metadata: {:?}", metadata.get("ai_summary"));
+        eprintln!("   Recommendation from metadata: {:?}", metadata.get("recommendation"));
+        eprintln!("   Key points from metadata: {:?}", metadata.get("key_points"));
+
         Ok(EmailData {
             subject: "Tender Opportunity".to_string(), // Fixed header as requested
             resource_id: msg.resource_id.clone(),
@@ -107,7 +115,7 @@ impl EmailData {
                 .and_then(|v| v.as_str())
                 .unwrap_or("Unknown Authority")
                 .to_string(),
-            summary: msg.summary.clone(),
+            summary: msg.summary.clone(), // This should be the simple text summary
             priority: msg.priority.clone(),
             prediction_confidence: metadata.get("ml_prediction")
                 .and_then(|ml| ml.get("confidence"))
@@ -126,7 +134,7 @@ impl EmailData {
                 .to_string(),
             ai_summary: metadata.get("ai_summary")
                 .and_then(|v| v.as_str())
-                .unwrap_or(&msg.summary)
+                .unwrap_or(&msg.summary) // Fallback to message summary
                 .to_string(),
             key_points: metadata.get("key_points")
                 .and_then(|v| v.as_array())
@@ -134,14 +142,23 @@ impl EmailData {
                     .filter_map(|item| item.as_str())
                     .map(|s| s.to_string())
                     .collect())
-                .unwrap_or_else(|| vec!["See summary for details".to_string()]),
+                .unwrap_or_else(|| {
+                    eprintln!("⚠️ No key_points found in metadata, using default");
+                    vec!["See summary for details".to_string()]
+                }),
             recommendation: metadata.get("recommendation")
                 .and_then(|v| v.as_str())
-                .unwrap_or("See summary")
+                .unwrap_or_else(|| {
+                    eprintln!("⚠️ No recommendation found in metadata");
+                    "See summary"
+                })
                 .to_string(),
             confidence_assessment: metadata.get("confidence_assessment")
                 .and_then(|v| v.as_str())
-                .unwrap_or("Assessment pending")
+                .unwrap_or_else(|| {
+                    eprintln!("⚠️ No confidence_assessment found in metadata");
+                    "Assessment pending"
+                })
                 .to_string(),
             pdf_url: metadata.get("pdf_url")
                 .and_then(|v| v.as_str())

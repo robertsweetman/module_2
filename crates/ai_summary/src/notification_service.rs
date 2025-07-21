@@ -79,13 +79,26 @@ impl NotificationService {
         info!("   Claude says NO BID: {}", claude_says_no_bid);
         info!("   Claude says YES BID: {}", claude_says_bid);
         
-        // STRICT FILTERING: Only send notifications when Claude genuinely agrees with bidding
-        let should_notify = if ml_prediction.should_bid {
-            // ML wants to bid - ONLY notify if Claude explicitly agrees AND doesn't say no bid
+        // Add confidence threshold check - don't send notifications for low confidence ML predictions
+        let ml_confidence_threshold = 0.50; // 50% minimum confidence
+        let ml_confidence_too_low = ml_prediction.confidence < ml_confidence_threshold;
+        
+        if ml_confidence_too_low {
+            info!("   ❌ ML confidence {:.1}% is below threshold {:.1}% - suppressing notification", 
+                  ml_prediction.confidence * 100.0, ml_confidence_threshold * 100.0);
+        }
+        
+        // STRICT FILTERING: Only send notifications when Claude genuinely agrees with bidding AND ML confidence is adequate
+        let should_notify = if ml_prediction.should_bid && !ml_confidence_too_low {
+            // ML wants to bid with adequate confidence - ONLY notify if Claude explicitly agrees AND doesn't say no bid
             let notify = claude_says_bid && !claude_says_no_bid;
-            info!("   ML=BID case: notify={} (claude_says_bid={} && !claude_says_no_bid={})", 
+            info!("   ML=BID+HIGH_CONF case: notify={} (claude_says_bid={} && !claude_says_no_bid={})", 
                   notify, claude_says_bid, !claude_says_no_bid);
             notify
+        } else if ml_prediction.should_bid && ml_confidence_too_low {
+            // ML wants to bid but confidence too low - suppress
+            info!("   ML=BID+LOW_CONF case: notify=false (confidence too low)");
+            false
         } else {
             // ML doesn't want to bid - very limited notifications for strategic insights only
             info!("   ML=NO-BID case: notify=false (ML doesn't recommend bidding)");

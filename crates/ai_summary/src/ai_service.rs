@@ -186,9 +186,13 @@ Format as JSON with fields: summary, key_points (array), recommendation, confide
     /// Parse AI response into structured result
     fn parse_ai_response(&self, response: String, summary_type: &str, resource_id: i64) -> Result<AISummaryResult> {
         debug!("🔍 Parsing Claude response for resource_id: {}", resource_id);
+        info!("📝 Raw Claude response (first 500 chars): {}", 
+              if response.len() > 500 { format!("{}...", &response[..500]) } else { response.clone() });
         
         // Try to parse as JSON first
         if let Ok(json_response) = serde_json::from_str::<Value>(&response) {
+            info!("✅ Successfully parsed Claude response as JSON");
+            
             let summary = json_response["summary"].as_str().unwrap_or(&response).to_string();
             let key_points = json_response["key_points"]
                 .as_array()
@@ -196,6 +200,12 @@ Format as JSON with fields: summary, key_points (array), recommendation, confide
                 .unwrap_or_else(|| vec!["AI response could not be fully parsed".to_string()]);
             let recommendation = json_response["recommendation"].as_str().unwrap_or("See summary").to_string();
             let confidence_assessment = json_response["confidence_assessment"].as_str().unwrap_or("Moderate confidence").to_string();
+            
+            info!("🎯 Parsed Claude data:");
+            info!("   Summary: '{}'", summary);
+            info!("   Key points: {:?}", key_points);
+            info!("   Recommendation: '{}'", recommendation);
+            info!("   Confidence: '{}'", confidence_assessment);
             
             // Check if Claude overrode the ML prediction
             let mut processing_notes = vec!["Successfully parsed structured Claude response".to_string()];
