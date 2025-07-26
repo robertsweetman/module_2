@@ -187,7 +187,7 @@ Format as JSON with fields: summary, key_points (array), recommendation, confide
         let request = anthropic_sdk::Client::new()
             .version("2023-06-01")
             .auth(&self.api_key)
-            .model("claude-3-5-sonnet-20241022")
+            .model("claude-sonnet-4-20250514")
             .messages(&json!([
                 {"role": "user", "content": prompt}
             ]))
