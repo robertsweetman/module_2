@@ -8,6 +8,7 @@ pub struct AISummaryMessage {
     pub resource_id: String,
     pub tender_title: String,
     pub ml_prediction: MLPredictionResult,
+    #[serde(default)]
     pub pdf_content: String, // May be truncated/empty - we'll fetch full content if needed
     pub priority: String,    // "URGENT" or "NORMAL"
     pub timestamp: DateTime<Utc>,
@@ -18,18 +19,29 @@ pub struct AISummaryMessage {
 pub struct MLPredictionResult {
     pub should_bid: bool,
     pub confidence: f64,
+    #[serde(default = "default_reasoning")]
     pub reasoning: String,
     pub feature_scores: FeatureScores,
+}
+
+fn default_reasoning() -> String {
+    "No reasoning provided".to_string()
 }
 
 /// Feature scores for transparency and debugging (matches ml_bid_predictor)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FeatureScores {
+    #[serde(default)]
     pub codes_count_score: f64,
+    #[serde(default)]
     pub has_codes_score: f64,
+    #[serde(default)]
     pub title_length_score: f64,
+    #[serde(default)]
     pub ca_score: f64,
+    #[serde(default)]
     pub text_features_score: f64,
+    #[serde(default)]
     pub total_score: f64,
 }
 

@@ -66,9 +66,16 @@ async fn process_summary_message(
 ) -> Result<()> {
     info!("🔄 Processing AI summary message");
     
-    // Parse the incoming message
-    let ai_message: AISummaryMessage = serde_json::from_str(message_body)?;
-    let resource_id: i64 = ai_message.resource_id.parse()?;
+    // Parse the incoming message with better error handling
+    let ai_message: AISummaryMessage = serde_json::from_str(message_body)
+        .map_err(|e| {
+            error!("❌ Failed to parse SQS message JSON: {}", e);
+            error!("📄 Message body: {}", message_body);
+            anyhow::anyhow!("JSON parsing failed: {} - Message: {}", e, message_body)
+        })?;
+        
+    let resource_id: i64 = ai_message.resource_id.parse()
+        .map_err(|e| anyhow::anyhow!("Failed to parse resource_id '{}': {}", ai_message.resource_id, e))?;
     
     info!("📋 Processing summary for resource_id: {}, priority: {}, ML confidence: {:.1}%", 
           resource_id, ai_message.priority, ai_message.ml_prediction.confidence * 100.0);
