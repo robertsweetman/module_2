@@ -2,6 +2,14 @@ use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc, NaiveDateTime, NaiveDate};
 use bigdecimal::BigDecimal;
 
+/// Enum to handle different message types that can be sent to AI Summary Lambda
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum IncomingMessage {
+    AISummary(AISummaryMessage),
+    TenderRecord(TenderRecord),
+}
+
 /// AI Summary queue message structure (matches ml_bid_predictor)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AISummaryMessage {

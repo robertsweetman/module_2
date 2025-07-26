@@ -10,7 +10,7 @@ mod database;
 mod ai_service;
 mod notification_service;
 
-use types::{AISummaryMessage, Config};
+use types::{AISummaryMessage, IncomingMessage, Config, MLPredictionResult, FeatureScores};
 use database::Database;
 use ai_service::AIService;
 use notification_service::NotificationService;
@@ -67,15 +67,59 @@ async fn process_summary_message(
     info!("🔄 Processing AI summary message");
     
     // Parse the incoming message with better error handling
-    let ai_message: AISummaryMessage = serde_json::from_str(message_body)
+    let incoming_message: IncomingMessage = serde_json::from_str(message_body)
         .map_err(|e| {
             error!("❌ Failed to parse SQS message JSON: {}", e);
             error!("📄 Message body: {}", message_body);
+            
+            // Try to provide more specific error context
+            if message_body.contains("\"pdf_content\": null") {
+                error!("🔍 Detected null pdf_content field in message");
+            }
+            if message_body.contains("\"reasoning\": null") {
+                error!("🔍 Detected null reasoning field in ML prediction");
+            }
+            
             anyhow::anyhow!("JSON parsing failed: {} - Message: {}", e, message_body)
         })?;
-        
-    let resource_id: i64 = ai_message.resource_id.parse()
-        .map_err(|e| anyhow::anyhow!("Failed to parse resource_id '{}': {}", ai_message.resource_id, e))?;
+    
+    // Convert to standardized format
+    let (resource_id, ai_message) = match incoming_message {
+        IncomingMessage::AISummary(msg) => {
+            let resource_id: i64 = msg.resource_id.parse()
+                .map_err(|e| anyhow::anyhow!("Failed to parse resource_id '{}': {}", msg.resource_id, e))?;
+            (resource_id, msg)
+        },
+        IncomingMessage::TenderRecord(tender) => {
+            info!("📋 Received TenderRecord directly - creating default ML prediction");
+            
+            // Create a default ML prediction for direct tender processing
+            let default_ml_prediction = MLPredictionResult {
+                should_bid: true, // Assume we want to analyze it if it was sent directly
+                confidence: 0.5, // Neutral confidence
+                reasoning: "Direct processing - no ML prediction available".to_string(),
+                feature_scores: FeatureScores {
+                    codes_count_score: 0.0,
+                    has_codes_score: 0.0,
+                    title_length_score: 0.0,
+                    ca_score: 0.0,
+                    text_features_score: 0.0,
+                    total_score: 0.0,
+                },
+            };
+            
+            let ai_message = AISummaryMessage {
+                resource_id: tender.resource_id.to_string(),
+                tender_title: tender.title.clone(),
+                ml_prediction: default_ml_prediction,
+                pdf_content: tender.pdf_content.unwrap_or_default(),
+                priority: "NORMAL".to_string(),
+                timestamp: chrono::Utc::now(),
+            };
+            
+            (tender.resource_id, ai_message)
+        }
+    };
     
     info!("📋 Processing summary for resource_id: {}, priority: {}, ML confidence: {:.1}%", 
           resource_id, ai_message.priority, ai_message.ml_prediction.confidence * 100.0);
