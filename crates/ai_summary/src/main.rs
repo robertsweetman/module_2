@@ -15,6 +15,19 @@ use database::Database;
 use ai_service::AIService;
 use notification_service::NotificationService;
 
+/// Safely truncate a string at the specified byte position, respecting UTF-8 character boundaries
+fn safe_truncate(text: &str, max_bytes: usize) -> String {
+    if text.len() <= max_bytes {
+        return text.to_string();
+    }
+    
+    let mut end = max_bytes;
+    while !text.is_char_boundary(end) && end > 0 {
+        end -= 1;
+    }
+    format!("{}...", &text[..end])
+}
+
 async fn function_handler(event: LambdaEvent<SqsEvent>) -> Result<String, Error> {
     info!("=== AI SUMMARY LAMBDA STARTED ===");
     
@@ -194,12 +207,7 @@ async fn process_summary_message(
         ).await?;
         
         // Log summary for monitoring
-        info!("📋 Summary preview (email sent): {}", 
-              if updated_summary.ai_summary.len() > 200 {
-                  format!("{}...", &updated_summary.ai_summary[..200])
-              } else {
-                  updated_summary.ai_summary.clone()
-              });
+        info!("📋 Summary preview (email sent): {}", safe_truncate(&updated_summary.ai_summary, 200));
     } else {
         info!("🚫 Suppressing notification - Claude overrode ML recommendation or identified non-IT tender");
         
@@ -210,12 +218,7 @@ async fn process_summary_message(
         // Store the updated result with suppression flag
         database.store_ai_summary(&updated_summary).await?;
         
-        info!("📋 Summary preview (no email sent): {}", 
-              if updated_summary.ai_summary.len() > 200 {
-                  format!("{}...", &updated_summary.ai_summary[..200])
-              } else {
-                  updated_summary.ai_summary.clone()
-              });
+        info!("📋 Summary preview (no email sent): {}", safe_truncate(&updated_summary.ai_summary, 200));
     }
     
     Ok(())

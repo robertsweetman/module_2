@@ -18,6 +18,19 @@ impl AIService {
         Self { api_key }
     }
     
+    /// Safely truncate a string at the specified byte position, respecting UTF-8 character boundaries
+    fn safe_truncate(text: &str, max_bytes: usize) -> String {
+        if text.len() <= max_bytes {
+            return text.to_string();
+        }
+        
+        let mut end = max_bytes;
+        while !text.is_char_boundary(end) && end > 0 {
+            end -= 1;
+        }
+        format!("{}...", &text[..end])
+    }
+    
     /// Generate AI summary - title only version (lightweight)
     pub async fn generate_title_summary(
         &self,
@@ -94,7 +107,7 @@ Format as JSON with fields: summary, key_points (array), recommendation, confide
         // Truncate PDF content if too long (keep within token limits - Claude has higher limits than GPT-4)
         let truncated_pdf = if pdf_content.pdf_text.len() > 15000 {
             warn!("📄 Truncating PDF content from {} to 15000 chars", pdf_content.pdf_text.len());
-            format!("{}...[TRUNCATED]", &pdf_content.pdf_text[..15000])
+            format!("{}[TRUNCATED]", Self::safe_truncate(&pdf_content.pdf_text, 15000))
         } else {
             pdf_content.pdf_text.clone()
         };
@@ -219,8 +232,10 @@ Format as JSON with fields: summary, key_points (array), recommendation, confide
     /// Parse AI response into structured result
     fn parse_ai_response(&self, response: String, summary_type: &str, resource_id: i64) -> Result<AISummaryResult> {
         debug!("🔍 Parsing Claude response for resource_id: {}", resource_id);
-        info!("📝 Raw Claude response (first 500 chars): {}", 
-              if response.len() > 500 { format!("{}...", &response[..500]) } else { response.clone() });
+        
+        // Safe string truncation that respects UTF-8 character boundaries
+        let preview = Self::safe_truncate(&response, 500);
+        info!("📝 Raw Claude response (first 500 chars): {}", preview);
         
         // Try to parse as JSON first
         if let Ok(json_response) = serde_json::from_str::<Value>(&response) {
