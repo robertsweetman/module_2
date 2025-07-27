@@ -12,6 +12,7 @@ use types::{SNSMessage, Config};
 
 async fn function_handler(event: LambdaEvent<SqsEvent>) -> Result<String, Error> {
     info!("=== SNS NOTIFICATION LAMBDA STARTED ===");
+    info!("Received SQS event with {} records", event.payload.records.len());
     
     let config = Config::from_env().map_err(|e| {
         error!("Failed to load configuration: {}", e);

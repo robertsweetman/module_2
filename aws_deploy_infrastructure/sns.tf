@@ -1,4 +1,4 @@
-# SNS Topic for ML Prediction Notifications
+# SNS Topic for ML Prediction Notifications (kept for potential future use)
 resource "aws_sns_topic" "ml_predictions" {
   name = "ml-prediction-notifications"
 
@@ -7,20 +7,8 @@ resource "aws_sns_topic" "ml_predictions" {
   }
 }
 
-# SNS Topic subscription for lambda notifications
-resource "aws_sns_topic_subscription" "lambda_notification" {
-  topic_arn = aws_sns_topic.ml_predictions.arn
-  protocol  = "lambda"
-  endpoint  = aws_lambda_function.sns_notification.arn
-}
-
-# Grant SNS permission to invoke the lambda
-resource "aws_lambda_permission" "allow_sns" {
-  statement_id  = "AllowExecutionFromSNS"
-  action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.sns_notification.function_name
-  principal     = "sns.amazonaws.com"
-  source_arn    = aws_sns_topic.ml_predictions.arn
-}
+# NOTE: SNS subscription to sns_notification Lambda removed
+# We now use SQS queue approach:
+# ai_summary → sns-notification-queue (SQS) → sns_notification Lambda → emails
 
 
