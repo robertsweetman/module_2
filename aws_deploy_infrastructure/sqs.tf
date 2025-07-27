@@ -210,3 +210,16 @@ resource "aws_sqs_queue" "sns_dlq" {
   }
 }
 
+# Lambda trigger from SNS notification SQS
+resource "aws_lambda_event_source_mapping" "sns_notification_sqs_trigger" {
+  event_source_arn = aws_sqs_queue.sns_queue.arn
+  function_name    = aws_lambda_function.sns_notification.function_name
+  
+  batch_size       = 1  # Process one notification at a time
+  maximum_batching_window_in_seconds = 0
+  
+  scaling_config {
+    maximum_concurrency = 10  # Allow multiple email notifications in parallel
+  }
+}
+

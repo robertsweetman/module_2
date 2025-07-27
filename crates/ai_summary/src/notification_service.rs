@@ -1,15 +1,15 @@
 use crate::types::{SNSMessage, Config, AISummaryResult, TenderRecord, MLPredictionResult};
-use aws_sdk_sns::Client as SnsClient;
+use aws_sdk_sqs::Client as SqsClient;
 use aws_config::BehaviorVersion;
 use anyhow::Result;
-use tracing::{info, debug, warn};
+use tracing::{info, warn};
 use chrono::Utc;
 use serde_json;
 
-/// Notification service for sending SNS messages
+/// Notification service for sending messages to SQS notification queue
 pub struct NotificationService {
-    sns_client: SnsClient,
-    topic_arn: String,
+    sqs_client: SqsClient,
+    queue_url: String,
 }
 
 impl NotificationService {
@@ -19,12 +19,12 @@ impl NotificationService {
             .load()
             .await;
         
-        let sns_client = SnsClient::new(&aws_config);
+        let sqs_client = SqsClient::new(&aws_config);
         
-        info!("✅ Notification service initialized");
+        info!("✅ Notification service initialized for SQS queue");
         Ok(Self {
-            sns_client,
-            topic_arn: config.sns_topic_arn.clone(),
+            sqs_client,
+            queue_url: config.sns_queue_url.clone(),
         })
     }
     
@@ -231,30 +231,26 @@ impl NotificationService {
             }),
         };
         
-        self.send_sns_notification(&sns_message).await?;
+        self.send_sqs_notification(&sns_message).await?;
         Ok(())
     }
     
-    /// Send SNS notification
-    async fn send_sns_notification(&self, message: &SNSMessage) -> Result<()> {
-        let subject = "Tender Opportunity".to_string();
+    /// Send notification message to SQS queue
+    async fn send_sqs_notification(&self, message: &SNSMessage) -> Result<()> {
+        let message_body = serde_json::to_string(message)?;
         
-        let message_body = serde_json::to_string_pretty(message)?;
+        info!("📤 Sending notification to SQS queue: {}", self.queue_url);
         
-        let response = self.sns_client
-            .publish()
-            .topic_arn(&self.topic_arn)
-            .subject(subject)
-            .message(message_body)
+        let response = self.sqs_client
+            .send_message()
+            .queue_url(&self.queue_url)
+            .message_body(message_body)
             .send()
             .await?;
         
-        debug!("✅ SNS notification sent for: {} (MessageId: {})", 
+        info!("✅ SQS notification sent for tender {} (MessageId: {})", 
                message.resource_id, 
                response.message_id().unwrap_or("unknown"));
-        
-        info!("📧 Notification sent: {} priority for tender {}", 
-              message.priority, message.resource_id);
         
         Ok(())
     }

@@ -116,7 +116,7 @@ pub struct SNSMessage {
 pub struct Config {
     pub database_url: String,
     pub anthropic_api_key: String,
-    pub sns_topic_arn: String,
+    pub sns_queue_url: String,
 }
 
 impl Config {
@@ -126,8 +126,8 @@ impl Config {
                 .map_err(|_| anyhow::anyhow!("DATABASE_URL not set"))?,
             anthropic_api_key: std::env::var("ANTHROPIC_API_KEY")
                 .map_err(|_| anyhow::anyhow!("ANTHROPIC_API_KEY not set"))?,
-            sns_topic_arn: std::env::var("SNS_TOPIC_ARN")
-                .map_err(|_| anyhow::anyhow!("SNS_TOPIC_ARN not set"))?
+            sns_queue_url: std::env::var("SNS_QUEUE_URL")
+                .map_err(|_| anyhow::anyhow!("SNS_QUEUE_URL not set"))?
         })
     }
 }

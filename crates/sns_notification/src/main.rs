@@ -1,6 +1,6 @@
 // crates/sns_notification/src/main.rs
 use lambda_runtime::{service_fn, LambdaEvent, Error, run};
-use aws_lambda_events::event::sns::SnsEvent;
+use aws_lambda_events::event::sqs::SqsEvent;
 use anyhow::Result;
 use tracing::{info, error};
 
@@ -10,7 +10,7 @@ mod types;
 use email_service::EmailService;
 use types::{SNSMessage, Config};
 
-async fn function_handler(event: LambdaEvent<SnsEvent>) -> Result<String, Error> {
+async fn function_handler(event: LambdaEvent<SqsEvent>) -> Result<String, Error> {
     info!("=== SNS NOTIFICATION LAMBDA STARTED ===");
     
     let config = Config::from_env().map_err(|e| {
@@ -25,31 +25,34 @@ async fn function_handler(event: LambdaEvent<SnsEvent>) -> Result<String, Error>
     
     let mut processed_count = 0;
     
-    // Process each SNS record
+    // Process each SQS record (containing our notification messages)
     for record in event.payload.records {
-        let message = record.sns.message;
-        info!("Processing SNS message: {}", message);
-        
-        // Parse the SNS message
-        let sns_message: SNSMessage = serde_json::from_str(&message)
-            .map_err(|e| {
-                error!("Failed to parse SNS message: {}", e);
-                Error::from(format!("Failed to parse SNS message: {}", e).as_str())
-            })?;
-        
-        info!("Parsed SNS message - Type: {}, Priority: {}, Tender: {}", 
-              sns_message.message_type, 
-              sns_message.priority,
-              sns_message.resource_id);
-        
-        // Send email notification
-        email_service.send_notification(&sns_message).await
-            .map_err(|e| {
-                error!("Failed to send email notification: {}", e);
-                Error::from(format!("Failed to send email: {}", e).as_str())
-            })?;
-        
-        processed_count += 1;
+        if let Some(body) = &record.body {
+            info!("Processing SQS message: {}", body);
+            
+            // Parse the message directly (our SNSMessage structure)
+            let sns_message: SNSMessage = serde_json::from_str(body)
+                .map_err(|e| {
+                    error!("Failed to parse SQS message body: {}", e);
+                    Error::from(format!("Failed to parse message: {}", e).as_str())
+                })?;
+            
+            info!("Parsed notification message - Type: {}, Priority: {}, Tender: {}", 
+                  sns_message.message_type, 
+                  sns_message.priority,
+                  sns_message.resource_id);
+            
+            // Send email notification
+            email_service.send_notification(&sns_message).await
+                .map_err(|e| {
+                    error!("Failed to send email notification: {}", e);
+                    Error::from(format!("Failed to send email: {}", e).as_str())
+                })?;
+            
+            processed_count += 1;
+        } else {
+            error!("SQS record has no body - skipping");
+        }
     }
     
     info!("=== SNS NOTIFICATION LAMBDA COMPLETED ===");
