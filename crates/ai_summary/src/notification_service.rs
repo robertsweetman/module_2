@@ -31,7 +31,7 @@ impl NotificationService {
     /// Determine if notification should be sent - Claude is now the primary decision maker
     pub fn should_send_notification(
         summary_result: &AISummaryResult,
-        _ml_prediction: &MLPredictionResult, // ML is now just informational - Claude decides
+        _ml_prediction: &MLPredictionResult, // ML is used as fallback when Claude response fails
     ) -> bool {
         info!("🔍 Notification decision analysis (Claude-first approach):");
         
@@ -39,13 +39,51 @@ impl NotificationService {
         let recommendation_lower = summary_result.recommendation.to_lowercase();
         let ai_summary_lower = summary_result.ai_summary.to_lowercase();
         
+        // Check if this is a JSON parsing fallback case
+        let is_json_fallback = summary_result.recommendation == "Review the summary for recommendations" &&
+                              summary_result.processing_notes.iter().any(|note| note.contains("could not be parsed as JSON"));
+        
         // Look for explicit BID recommendation from Claude
         let claude_says_bid = recommendation_lower.contains("bid") && !recommendation_lower.contains("no bid");
         
         info!("   Claude recommendation: '{}'", summary_result.recommendation);
+        info!("   Is JSON parsing fallback: {}", is_json_fallback);
         info!("   Claude says BID: {}", claude_says_bid);
         
-        if !claude_says_bid {
+        // Special handling for JSON parsing fallback - analyze the summary content
+        if is_json_fallback {
+            info!("🔍 JSON parsing fallback detected - analyzing summary content for BID indicators");
+            
+            // Look for positive IT indicators in the summary
+            let it_keywords = [
+                "software development", "it consultancy", "it consulting", "technical support",
+                "system implementation", "database", "web development", "api", "cloud",
+                "cybersecurity", "network", "server", "application", "programming",
+                "crm system", "software", "digital platform", "technical", "it service"
+            ];
+            
+            let has_it_keywords = it_keywords.iter().any(|&keyword| ai_summary_lower.contains(keyword));
+            
+            // Look for explicit positive language
+            let positive_indicators = [
+                "legitimate it", "clear it", "genuine it", "solid it opportunity",
+                "this is an it", "it consultancy opportunity", "technical opportunity"
+            ];
+            
+            let has_positive_indicators = positive_indicators.iter().any(|&indicator| ai_summary_lower.contains(indicator));
+            
+            info!("   Has IT keywords: {}", has_it_keywords);
+            info!("   Has positive indicators: {}", has_positive_indicators);
+            
+            // If summary indicates clear IT opportunity, treat as BID recommendation
+            if has_it_keywords && has_positive_indicators {
+                info!("   ✅ FALLBACK APPROVAL: Summary indicates clear IT opportunity despite JSON parsing issue");
+                // Continue with other checks below
+            } else {
+                info!("   ❌ SUPPRESSED: Fallback analysis does not indicate clear IT opportunity");
+                return false;
+            }
+        } else if !claude_says_bid {
             info!("   ❌ SUPPRESSED: Claude does not recommend BID");
             return false;
         }

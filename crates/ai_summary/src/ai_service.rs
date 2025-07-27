@@ -233,92 +233,240 @@ Format as JSON with fields: summary, key_points (array), recommendation, confide
     fn parse_ai_response(&self, response: String, summary_type: &str, resource_id: i64) -> Result<AISummaryResult> {
         debug!("🔍 Parsing Claude response for resource_id: {}", resource_id);
         
+        // LOG THE COMPLETE RESPONSE FOR DEBUGGING
+        info!("🔬 === FULL CLAUDE RESPONSE START (resource_id: {}) ===", resource_id);
+        info!("{}", response);
+        info!("🔬 === FULL CLAUDE RESPONSE END (resource_id: {}) ===", resource_id);
+        
+        // Also log response metadata
+        info!("📊 Response metadata:");
+        info!("   Length: {} bytes", response.len());
+        info!("   Starts with: '{}'", response.chars().take(20).collect::<String>());
+        info!("   Ends with: '{}'", response.chars().rev().take(20).collect::<String>().chars().rev().collect::<String>());
+        info!("   Contains JSON markers: starts_with_brace={}, ends_with_brace={}", 
+              response.trim().starts_with('{'), response.trim().ends_with('}'));
+        info!("   Contains ```json: {}", response.contains("```json"));
+        info!("   Contains ```: {}", response.contains("```"));
+        
         // Safe string truncation that respects UTF-8 character boundaries
         let preview = Self::safe_truncate(&response, 500);
         info!("📝 Raw Claude response (first 500 chars): {}", preview);
         
+        // Try to extract JSON from response - Claude sometimes wraps JSON in text
+        let json_str = Self::extract_json_from_response(&response);
+        
+        // Log the extraction attempt
+        info!("🔧 JSON extraction attempt:");
+        info!("   Original length: {}", response.len());
+        info!("   Extracted length: {}", json_str.len());
+        info!("   Same as original: {}", response == json_str);
+        if response != json_str {
+            info!("🔬 === EXTRACTED JSON START ===");
+            info!("{}", json_str);
+            info!("🔬 === EXTRACTED JSON END ===");
+        }
+        
         // Try to parse as JSON first
-        if let Ok(json_response) = serde_json::from_str::<Value>(&response) {
-            info!("✅ Successfully parsed Claude response as JSON");
-            
-            let summary = json_response["summary"].as_str().unwrap_or(&response).to_string();
-            let key_points = json_response["key_points"]
-                .as_array()
-                .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
-                .unwrap_or_else(|| vec!["AI response could not be fully parsed".to_string()]);
-            let recommendation = json_response["recommendation"].as_str().unwrap_or("See summary").to_string();
-            let confidence_assessment = json_response["confidence_assessment"].as_str().unwrap_or("Moderate confidence").to_string();
-            
-            info!("🎯 Parsed Claude data:");
-            info!("   Summary: '{}'", summary);
-            info!("   Key points: {:?}", key_points);
-            info!("   Recommendation: '{}'", recommendation);
-            info!("   Confidence: '{}'", confidence_assessment);
-            
-            // Check if Claude overrode the ML prediction
-            let mut processing_notes = vec!["Successfully parsed structured Claude response".to_string()];
-            
-            // Look for override indicators in the response
-            let response_lower = response.to_lowercase();
-            if response_lower.contains("override") || response_lower.contains("overrid") {
-                processing_notes.push("⚠️ Claude OVERRODE the ML prediction".to_string());
-                info!("🔄 Claude overrode ML prediction for resource_id: {}", resource_id);
+        info!("🔧 Attempting to parse extracted JSON...");
+        match serde_json::from_str::<Value>(&json_str) {
+            Ok(json_response) => {
+                info!("✅ Successfully parsed Claude response as JSON");
+                
+                // Log the structure of the parsed JSON
+                info!("🏗️ JSON structure analysis:");
+                info!("   Has 'summary' field: {}", json_response.get("summary").is_some());
+                info!("   Has 'key_points' field: {}", json_response.get("key_points").is_some());
+                info!("   Has 'recommendation' field: {}", json_response.get("recommendation").is_some());
+                info!("   Has 'confidence_assessment' field: {}", json_response.get("confidence_assessment").is_some());
+                
+                // Log all top-level keys
+                if let Some(obj) = json_response.as_object() {
+                    let keys: Vec<&String> = obj.keys().collect();
+                    info!("   All JSON keys: {:?}", keys);
+                }
+                
+                let summary = json_response["summary"].as_str().unwrap_or(&response).to_string();
+                let key_points = json_response["key_points"]
+                    .as_array()
+                    .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+                    .unwrap_or_else(|| vec!["AI response could not be fully parsed".to_string()]);
+                let recommendation = json_response["recommendation"].as_str().unwrap_or("See summary").to_string();
+                let confidence_assessment = json_response["confidence_assessment"].as_str().unwrap_or("Moderate confidence").to_string();
+                
+                info!("🎯 Parsed Claude data:");
+                info!("   Summary: '{}'", summary);
+                info!("   Key points: {:?}", key_points);
+                info!("   Recommendation: '{}'", recommendation);
+                info!("   Confidence: '{}'", confidence_assessment);
+                
+                // Check if Claude overrode the ML prediction
+                let mut processing_notes = vec!["Successfully parsed structured Claude response".to_string()];
+                
+                // Look for override indicators in the response
+                let response_lower = response.to_lowercase();
+                if response_lower.contains("override") || response_lower.contains("overrid") {
+                    processing_notes.push("⚠️ Claude OVERRODE the ML prediction".to_string());
+                    info!("🔄 Claude overrode ML prediction for resource_id: {}", resource_id);
+                }
+                
+                // Check for non-IT keywords in recommendation/summary to flag potential false positives
+                let combined_text = format!("{} {}", summary.to_lowercase(), recommendation.to_lowercase());
+                let non_it_indicators = [
+                    "catering", "food service", "cleaning", "maintenance", "construction", 
+                    "building work", "architectural", "medical", "healthcare", "security guard",
+                    "waste management", "facilities management", "mechanical", "electrical installation",
+                    "plumbing", "hvac", "surveying", "legal services", "sewerage", "eeg machine",
+                    "school meals", "breakfast provision", "lunch provision", "meal service"
+                ];
+                
+                for indicator in &non_it_indicators {
+                    if combined_text.contains(indicator) {
+                        processing_notes.push(format!("🚨 NON-IT INDICATOR DETECTED: {}", indicator));
+                        warn!("Non-IT indicator '{}' found in Claude response for resource_id: {}", indicator, resource_id);
+                    }
+                }
+                
+                // Enhanced NO BID detection in Claude's response
+                let no_bid_patterns = [
+                    "no bid", "do not bid", "don't bid", "not bid", "avoid bid",
+                    "not suitable", "not appropriate", "not relevant", "outside scope",
+                    "non-it", "not it related", "not technical", "unrelated", "irrelevant"
+                ];
+                
+                let claude_says_no = no_bid_patterns.iter().any(|&pattern| combined_text.contains(pattern));
+                
+                if claude_says_no {
+                    processing_notes.push("🚫 Claude RECOMMENDS NO BID - Non-IT opportunity".to_string());
+                    info!("🚫 Claude recommends NO BID for resource_id: {} - '{}'", resource_id, recommendation);
+                }
+                
+                Ok(AISummaryResult {
+                    resource_id,
+                    summary_type: summary_type.to_string(),
+                    ai_summary: summary,
+                    key_points,
+                    recommendation,
+                    confidence_assessment,
+                    processing_notes,
+                    created_at: Utc::now(),
+                })
+            },
+            Err(parse_error) => {
+                // Fallback: use entire response as summary
+                warn!("⚠️ Could not parse Claude response as JSON");
+                warn!("📄 JSON parsing error: {}", parse_error);
+                warn!("📄 Attempted JSON extraction: {}", json_str);
+                
+                // Try to extract recommendation from plain text
+                let extracted_recommendation = Self::extract_recommendation_from_text(&response);
+                
+                Ok(AISummaryResult {
+                    resource_id,
+                    summary_type: summary_type.to_string(),
+                    ai_summary: response.clone(),
+                    key_points: vec!["Claude response was in plain text format".to_string()],
+                    recommendation: extracted_recommendation,
+                    confidence_assessment: "Unknown - response format issue".to_string(),
+                    processing_notes: vec!["Claude response could not be parsed as JSON".to_string()],
+                    created_at: Utc::now(),
+                })
             }
+        }
+    }
+    
+    /// Extract JSON from Claude response that might be wrapped in text
+    fn extract_json_from_response(response: &str) -> String {
+        info!("🔧 Attempting JSON extraction from response...");
+        
+        // First try the response as-is
+        let trimmed = response.trim();
+        if trimmed.starts_with('{') && trimmed.ends_with('}') {
+            info!("   ✅ Response is already clean JSON (starts and ends with braces)");
+            return trimmed.to_string();
+        }
+        
+        // Look for JSON block markers (```json ... ```)
+        if let Some(start_pos) = response.find("```json") {
+            info!("   🔍 Found ```json marker at position {}", start_pos);
+            let after_marker = start_pos + 7; // Skip "```json"
             
-            // Check for non-IT keywords in recommendation/summary to flag potential false positives
-            let combined_text = format!("{} {}", summary.to_lowercase(), recommendation.to_lowercase());
-            let non_it_indicators = [
-                "catering", "food service", "cleaning", "maintenance", "construction", 
-                "building work", "architectural", "medical", "healthcare", "security guard",
-                "waste management", "facilities management", "mechanical", "electrical installation",
-                "plumbing", "hvac", "surveying", "legal services", "sewerage", "eeg machine",
-                "school meals", "breakfast provision", "lunch provision", "meal service"
-            ];
+            // Skip any whitespace/newlines after ```json
+            let content_start = response[after_marker..].chars()
+                .position(|c| !c.is_whitespace())
+                .map(|pos| after_marker + pos)
+                .unwrap_or(after_marker);
             
-            for indicator in &non_it_indicators {
-                if combined_text.contains(indicator) {
-                    processing_notes.push(format!("🚨 NON-IT INDICATOR DETECTED: {}", indicator));
-                    warn!("Non-IT indicator '{}' found in Claude response for resource_id: {}", indicator, resource_id);
+            if let Some(end_pos) = response[content_start..].find("```") {
+                let json_content = &response[content_start..content_start + end_pos];
+                info!("   ✅ Extracted JSON from ```json block (content length: {})", json_content.len());
+                info!("   📝 Extracted content starts with: '{}'", json_content.chars().take(50).collect::<String>());
+                return json_content.trim().to_string();
+            } else {
+                info!("   ⚠️ Found ```json but no closing ```");
+            }
+        }
+        
+        // Look for just { } blocks (find the outermost braces)
+        if let Some(start_pos) = response.find('{') {
+            info!("   🔍 Found opening brace at position {}", start_pos);
+            
+            // Find the matching closing brace
+            let mut brace_count = 0;
+            let mut end_pos = None;
+            
+            for (i, c) in response[start_pos..].char_indices() {
+                match c {
+                    '{' => brace_count += 1,
+                    '}' => {
+                        brace_count -= 1;
+                        if brace_count == 0 {
+                            end_pos = Some(start_pos + i);
+                            break;
+                        }
+                    }
+                    _ => {}
                 }
             }
             
-            // Enhanced NO BID detection in Claude's response
-            let no_bid_patterns = [
-                "no bid", "do not bid", "don't bid", "not bid", "avoid bid",
-                "not suitable", "not appropriate", "not relevant", "outside scope",
-                "non-it", "not it related", "not technical", "unrelated", "irrelevant"
-            ];
-            
-            let claude_says_no = no_bid_patterns.iter().any(|&pattern| combined_text.contains(pattern));
-            
-            if claude_says_no {
-                processing_notes.push("🚫 Claude RECOMMENDS NO BID - Non-IT opportunity".to_string());
-                info!("🚫 Claude recommends NO BID for resource_id: {} - '{}'", resource_id, recommendation);
+            if let Some(end) = end_pos {
+                let json_content = &response[start_pos..=end];
+                info!("   ✅ Extracted JSON from brace matching (content length: {})", json_content.len());
+                info!("   📝 Extracted content starts with: '{}'", json_content.chars().take(50).collect::<String>());
+                return json_content.to_string();
+            } else {
+                info!("   ⚠️ Found opening brace but no matching closing brace");
             }
-            
-            Ok(AISummaryResult {
-                resource_id,
-                summary_type: summary_type.to_string(),
-                ai_summary: summary,
-                key_points,
-                recommendation,
-                confidence_assessment,
-                processing_notes,
-                created_at: Utc::now(),
-            })
-        } else {
-            // Fallback: use entire response as summary
-            warn!("⚠️ Could not parse Claude response as JSON, using as plain text");
-            Ok(AISummaryResult {
-                resource_id,
-                summary_type: summary_type.to_string(),
-                ai_summary: response,
-                key_points: vec!["Claude response was in plain text format".to_string()],
-                recommendation: "Review the summary for recommendations".to_string(),
-                confidence_assessment: "Unknown - response format issue".to_string(),
-                processing_notes: vec!["Claude response could not be parsed as JSON".to_string()],
-                created_at: Utc::now(),
-            })
         }
+        
+        // No JSON structure found
+        info!("   ❌ No JSON structure detected in response");
+        response.to_string()
+    }
+    
+    /// Extract recommendation from plain text response
+    fn extract_recommendation_from_text(text: &str) -> String {
+        let text_lower = text.to_lowercase();
+        
+        // Look for explicit bid recommendations
+        if text_lower.contains("recommend bid") || text_lower.contains("should bid") {
+            return "BID".to_string();
+        }
+        
+        if text_lower.contains("no bid") || text_lower.contains("don't bid") || text_lower.contains("do not bid") {
+            return "NO BID".to_string();
+        }
+        
+        // Look for positive IT indicators as fallback
+        let it_indicators = [
+            "legitimate it", "genuine it opportunity", "clear it consultancy",
+            "this is an it", "solid it opportunity", "technical opportunity"
+        ];
+        
+        if it_indicators.iter().any(|&indicator| text_lower.contains(indicator)) {
+            return "BID - IT opportunity identified".to_string();
+        }
+        
+        // Default fallback
+        "Review the summary for recommendations".to_string()
     }
 }

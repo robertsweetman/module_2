@@ -190,11 +190,11 @@ async fn process_summary_message(
     
     // Determine if we should send notification based on ML and Claude agreement
     if NotificationService::should_send_notification(&summary_result, &ai_message.ml_prediction) {
-        info!("📧 Sending notification - Claude and ML are aligned or Claude confirms bid opportunity");
+        info!("📧 Sending notification - Claude analysis supports notification");
         
         // Add notification sent flag to processing notes
         let mut updated_summary = summary_result.clone();
-        updated_summary.processing_notes.push("📧 EMAIL NOTIFICATION SENT - Claude confirmed ML recommendation".to_string());
+        updated_summary.processing_notes.push("📧 EMAIL NOTIFICATION SENT - Analysis supports bid opportunity".to_string());
         
         // Store the updated result with notification flag
         database.store_ai_summary(&updated_summary).await?;
@@ -209,11 +209,11 @@ async fn process_summary_message(
         // Log summary for monitoring
         info!("📋 Summary preview (email sent): {}", safe_truncate(&updated_summary.ai_summary, 200));
     } else {
-        info!("🚫 Suppressing notification - Claude overrode ML recommendation or identified non-IT tender");
+        info!("🚫 Suppressing notification - Analysis does not support bid opportunity");
         
         // Add notification suppressed flag to processing notes
         let mut updated_summary = summary_result.clone();
-        updated_summary.processing_notes.push("🚫 EMAIL NOTIFICATION SUPPRESSED - Claude overrode ML or identified non-IT tender".to_string());
+        updated_summary.processing_notes.push("🚫 EMAIL NOTIFICATION SUPPRESSED - Analysis indicates no bid opportunity".to_string());
         
         // Store the updated result with suppression flag
         database.store_ai_summary(&updated_summary).await?;
