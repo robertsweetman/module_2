@@ -23,8 +23,4 @@ resource "aws_lambda_permission" "allow_sns" {
   source_arn    = aws_sns_topic.ml_predictions.arn
 }
 
-# Output the topic ARN for use in other resources
-output "sns_topic_arn" {
-  value = aws_sns_topic.ml_predictions.arn
-  description = "ARN of the ML predictions SNS topic"
-}
+
