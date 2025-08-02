@@ -120,7 +120,7 @@ impl EmailData {
             prediction_confidence: metadata.get("ml_prediction")
                 .and_then(|ml| ml.get("confidence"))
                 .and_then(|v| v.as_f64())
-                .map(|v| v * 100.0), // Convert to percentage
+                .map(|v| (v * 100.0).round()), // Convert to percentage and round to nearest whole number
             deadline: metadata.get("deadline")
                 .and_then(|v| v.as_str())
                 .map(|s| s.to_string()),

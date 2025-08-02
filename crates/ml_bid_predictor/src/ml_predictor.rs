@@ -135,12 +135,12 @@ impl OptimizedBidPredictor {
         };
         
         info!(
-            "🎯 ML Prediction for {}: {} (score: {:.3}, threshold: {:.3}→{:.3}, exclusion: {:.1})",
+            "🎯 ML Prediction for {}: {} (score: {:.0}%, threshold: {:.0}%→{:.0}%, exclusion: {:.1})",
             tender.resource_id,
             if should_bid { "BID" } else { "NO-BID" },
-            prediction_score,
-            self.threshold,
-            adjusted_threshold,
+            prediction_score * 100.0,
+            self.threshold * 100.0,
+            adjusted_threshold * 100.0,
             features.exclusion_score
         );
         
@@ -234,15 +234,15 @@ impl OptimizedBidPredictor {
         };
         
         let threshold_info = if threshold != self.threshold {
-            format!(" (adjusted threshold: {:.3})", threshold)
+            format!(" (adjusted threshold: {:.0}%)", threshold * 100.0)
         } else {
             String::new()
         };
         
         if reasons.is_empty() {
-            format!("{}: Score {:.3} vs threshold {:.3}{}", category, score, threshold, threshold_info)
+            format!("{}: Score {:.0}% vs threshold {:.0}%{}", category, score * 100.0, threshold * 100.0, threshold_info)
         } else {
-            format!("{}: {} (Score: {:.3}{})", category, reasons.join(", "), score, threshold_info)
+            format!("{}: {} (Score: {:.0}%{})", category, reasons.join(", "), score * 100.0, threshold_info)
         }
     }
     
