@@ -1,73 +1,26 @@
-# Security group for Lambda functions (no cross-references in inline rules)
-resource "aws_security_group" "lambda_sg" {
-  name        = "lambda-sg"
-  description = "Security group for Lambda functions"
-  vpc_id      = data.aws_vpc.default.id
-
-  # Allow HTTPS outbound for external API calls (e.g., Anthropic API)
-  egress {
-    description = "HTTPS outbound"
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+# Import existing security groups instead of trying to manage them
+data "aws_security_group" "lambda_sg" {
+  filter {
+    name   = "group-name"
+    values = ["lambda-sg"]
   }
-
-  # Allow HTTP outbound for any HTTP API calls
-  egress {
-    description = "HTTP outbound"
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  tags = {
-    Name = "lambda-sg"
-  }
-
-  lifecycle {
-    ignore_changes = [ingress, egress]
-  }
+  vpc_id = data.aws_vpc.default.id
 }
 
-# Security group for bastion host (no cross-references in inline rules)
-resource "aws_security_group" "bastion_sg" {
-  name        = "bastion-sg"
-  description = "Security group for bastion host with SSM access"
-  vpc_id      = data.aws_vpc.default.id
-
-  # Allow HTTPS outbound for SSM
-  egress {
-    description = "HTTPS outbound for SSM"
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+data "aws_security_group" "bastion_sg" {
+  filter {
+    name   = "group-name"
+    values = ["bastion-sg"]
   }
-
-  tags = {
-    Name = "bastion-sg"
-  }
-
-  lifecycle {
-    ignore_changes = [ingress, egress]
-  }
+  vpc_id = data.aws_vpc.default.id
 }
 
-# Create a security group for the RDS instance (no cross-references in inline rules)
-resource "aws_security_group" "postgres_sg" {
-  name        = "postgres-sg"
-  description = "Allow PostgreSQL inbound traffic from Lambda and Bastion only"
-  vpc_id      = data.aws_vpc.default.id
-
-  tags = {
-    Name = "postgres-sg"
+data "aws_security_group" "postgres_sg" {
+  filter {
+    name   = "group-name"
+    values = ["postgres-sg"]
   }
-
-  lifecycle {
-    ignore_changes = [ingress, egress]
-  }
+  vpc_id = data.aws_vpc.default.id
 }
 
 # Separate security group rules to avoid circular dependencies
