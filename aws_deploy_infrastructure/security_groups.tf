@@ -1,17 +1,8 @@
-# Security group for Lambda functions
+# Security group for Lambda functions (no cross-references in inline rules)
 resource "aws_security_group" "lambda_sg" {
   name        = "lambda-sg"
   description = "Security group for Lambda functions"
   vpc_id      = data.aws_vpc.default.id
-
-  # Allow outbound traffic to RDS
-  egress {
-    description     = "PostgreSQL to RDS"
-    from_port       = 5432
-    to_port         = 5432
-    protocol        = "tcp"
-    security_groups = [aws_security_group.postgres_sg.id]
-  }
 
   # Allow HTTPS outbound for external API calls (e.g., Anthropic API)
   egress {
@@ -36,21 +27,11 @@ resource "aws_security_group" "lambda_sg" {
   }
 }
 
-# Security group for bastion host
+# Security group for bastion host (no cross-references in inline rules)
 resource "aws_security_group" "bastion_sg" {
   name        = "bastion-sg"
   description = "Security group for bastion host with SSM access"
   vpc_id      = data.aws_vpc.default.id
-
-  # No inbound rules needed - access via SSM Session Manager
-  # Allow outbound traffic to RDS
-  egress {
-    description     = "PostgreSQL to RDS"
-    from_port       = 5432
-    to_port         = 5432
-    protocol        = "tcp"
-    security_groups = [aws_security_group.postgres_sg.id]
-  }
 
   # Allow HTTPS outbound for SSM
   egress {
@@ -66,34 +47,61 @@ resource "aws_security_group" "bastion_sg" {
   }
 }
 
-# Create a security group for the RDS instance
+# Create a security group for the RDS instance (no cross-references in inline rules)
 resource "aws_security_group" "postgres_sg" {
   name        = "postgres-sg"
   description = "Allow PostgreSQL inbound traffic from Lambda and Bastion only"
   vpc_id      = data.aws_vpc.default.id
 
-  # Allow access from Lambda functions
-  ingress {
-    description     = "PostgreSQL from Lambda"
-    from_port       = 5432
-    to_port         = 5432
-    protocol        = "tcp"
-    security_groups = [aws_security_group.lambda_sg.id]
-  }
-
-  # Allow access from bastion host
-  ingress {
-    description     = "PostgreSQL from Bastion"
-    from_port       = 5432
-    to_port         = 5432
-    protocol        = "tcp"
-    security_groups = [aws_security_group.bastion_sg.id]
-  }
-
-  # No outbound rules needed for RDS
   tags = {
     Name = "postgres-sg"
   }
+}
+
+# Separate security group rules to avoid circular dependencies
+
+# Allow Lambda to connect to RDS
+resource "aws_security_group_rule" "lambda_to_postgres" {
+  type                     = "egress"
+  from_port                = 5432
+  to_port                  = 5432
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.postgres_sg.id
+  security_group_id        = aws_security_group.lambda_sg.id
+  description              = "PostgreSQL to RDS"
+}
+
+# Allow Bastion to connect to RDS
+resource "aws_security_group_rule" "bastion_to_postgres" {
+  type                     = "egress"
+  from_port                = 5432
+  to_port                  = 5432
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.postgres_sg.id
+  security_group_id        = aws_security_group.bastion_sg.id
+  description              = "PostgreSQL to RDS"
+}
+
+# Allow RDS to receive connections from Lambda
+resource "aws_security_group_rule" "postgres_from_lambda" {
+  type                     = "ingress"
+  from_port                = 5432
+  to_port                  = 5432
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.lambda_sg.id
+  security_group_id        = aws_security_group.postgres_sg.id
+  description              = "PostgreSQL from Lambda"
+}
+
+# Allow RDS to receive connections from Bastion
+resource "aws_security_group_rule" "postgres_from_bastion" {
+  type                     = "ingress"
+  from_port                = 5432
+  to_port                  = 5432
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.bastion_sg.id
+  security_group_id        = aws_security_group.postgres_sg.id
+  description              = "PostgreSQL from Bastion"
 }
 
 # Use default VPC
@@ -172,25 +180,25 @@ data "aws_ami" "amazon_linux" {
 # Bastion host EC2 instance
 resource "aws_instance" "bastion" {
   ami                    = data.aws_ami.amazon_linux.id
-  instance_type          = "t3.micro"  # Small, cost-effective instance
+  instance_type          = "t3.micro" # Small, cost-effective instance
   vpc_security_group_ids = [aws_security_group.bastion_sg.id]
   iam_instance_profile   = aws_iam_instance_profile.bastion_profile.name
-  
+
   # Use the first available subnet
   subnet_id = tolist(data.aws_subnets.default.ids)[0]
-  
+
   # Install PostgreSQL client
   user_data = <<-EOF
     #!/bin/bash
     yum update -y
     yum install -y postgresql
-    
+
     # Install AWS CLI v2
     curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
     yum install -y unzip
     unzip awscliv2.zip
     ./aws/install
-    
+
     # Create a connection script for easy database access
     cat > /home/ec2-user/connect-db.sh << 'SCRIPT'
 #!/bin/bash
@@ -204,13 +212,13 @@ echo ""
 echo "Example connection command:"
 echo "psql -h ${aws_db_instance.postgres.endpoint} -p 5432 -U ${var.db_admin_name} -d ${var.db_name}"
 SCRIPT
-    
+
     chmod +x /home/ec2-user/connect-db.sh
     chown ec2-user:ec2-user /home/ec2-user/connect-db.sh
   EOF
 
   tags = {
-    Name = "PostgreSQL-Bastion-Host"
+    Name    = "PostgreSQL-Bastion-Host"
     Purpose = "Database access via SSM Session Manager"
   }
 }
