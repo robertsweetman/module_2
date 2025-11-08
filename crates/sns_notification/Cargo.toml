@@ -18,6 +18,7 @@ handlebars = "4.0"
 chrono = { version = "0.4", features = ["serde"] }
 uuid = { version = "1.0", features = ["v4", "serde"] }
 sqlx = { version = "0.8.6", features = ["runtime-tokio-native-tls", "postgres"] }
+openssl = { version = "0.10.73", features = ["vendored"] }
 
 [[bin]]
 name = "sns_notification"
