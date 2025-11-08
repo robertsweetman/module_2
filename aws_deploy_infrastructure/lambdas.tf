@@ -23,7 +23,7 @@ resource "aws_lambda_function" "pdf_processing" {
   # VPC Configuration
   vpc_config {
     subnet_ids         = tolist(data.aws_subnets.default.ids)
-    security_group_ids = [data.aws_security_group.lambda_sg.id]
+    security_group_ids = [aws_security_group.lambda_sg.id]
   }
 
   environment {
@@ -57,7 +57,7 @@ resource "aws_lambda_function" "postgres_dataload" {
   # VPC Configuration
   vpc_config {
     subnet_ids         = tolist(data.aws_subnets.default.ids)
-    security_group_ids = [data.aws_security_group.lambda_sg.id]
+    security_group_ids = [aws_security_group.lambda_sg.id]
   }
 
   environment {
@@ -94,7 +94,7 @@ resource "aws_lambda_function" "get_data" {
   # VPC Configuration
   vpc_config {
     subnet_ids         = tolist(data.aws_subnets.default.ids)
-    security_group_ids = [data.aws_security_group.lambda_sg.id]
+    security_group_ids = [aws_security_group.lambda_sg.id]
   }
 
   environment {
@@ -126,7 +126,7 @@ resource "aws_lambda_function" "ml_bid_predictor" {
   # VPC Configuration
   vpc_config {
     subnet_ids         = tolist(data.aws_subnets.default.ids)
-    security_group_ids = [data.aws_security_group.lambda_sg.id]
+    security_group_ids = [aws_security_group.lambda_sg.id]
   }
 
   environment {
@@ -164,7 +164,7 @@ resource "aws_lambda_function" "ai_summary" {
   # VPC Configuration
   vpc_config {
     subnet_ids         = tolist(data.aws_subnets.default.ids)
-    security_group_ids = [data.aws_security_group.lambda_sg.id]
+    security_group_ids = [aws_security_group.lambda_sg.id]
   }
 
   environment {

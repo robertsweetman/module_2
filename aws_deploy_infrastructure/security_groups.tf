@@ -1,26 +1,61 @@
-# Import existing security groups instead of trying to manage them
-data "aws_security_group" "lambda_sg" {
-  filter {
-    name   = "group-name"
-    values = ["lambda-sg"]
+# Security group for Lambda functions
+resource "aws_security_group" "lambda_sg" {
+  name        = "lambda-sg"
+  description = "Security group for Lambda functions"
+  vpc_id      = data.aws_vpc.default.id
+
+  # Allow HTTPS outbound for external API calls (e.g., Anthropic API)
+  egress {
+    description = "HTTPS outbound"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
   }
-  vpc_id = data.aws_vpc.default.id
+
+  # Allow HTTP outbound for any HTTP API calls
+  egress {
+    description = "HTTP outbound"
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "lambda-sg"
+  }
 }
 
-data "aws_security_group" "bastion_sg" {
-  filter {
-    name   = "group-name"
-    values = ["bastion-sg"]
+# Security group for bastion host
+resource "aws_security_group" "bastion_sg" {
+  name        = "bastion-sg"
+  description = "Security group for bastion host with SSM access"
+  vpc_id      = data.aws_vpc.default.id
+
+  # Allow HTTPS outbound for SSM
+  egress {
+    description = "HTTPS outbound for SSM"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
   }
-  vpc_id = data.aws_vpc.default.id
+
+  tags = {
+    Name = "bastion-sg"
+  }
 }
 
-data "aws_security_group" "postgres_sg" {
-  filter {
-    name   = "group-name"
-    values = ["postgres-sg"]
+# Create a security group for the RDS instance
+resource "aws_security_group" "postgres_sg" {
+  name        = "postgres-sg"
+  description = "Allow PostgreSQL inbound traffic from Lambda and Bastion only"
+  vpc_id      = data.aws_vpc.default.id
+
+  tags = {
+    Name = "postgres-sg"
   }
-  vpc_id = data.aws_vpc.default.id
 }
 
 # Separate security group rules to avoid circular dependencies
@@ -31,8 +66,8 @@ resource "aws_security_group_rule" "lambda_to_postgres" {
   from_port                = 5432
   to_port                  = 5432
   protocol                 = "tcp"
-  source_security_group_id = data.aws_security_group.postgres_sg.id
-  security_group_id        = data.aws_security_group.lambda_sg.id
+  source_security_group_id = aws_security_group.postgres_sg.id
+  security_group_id        = aws_security_group.lambda_sg.id
   description              = "PostgreSQL to RDS"
 }
 
@@ -42,8 +77,8 @@ resource "aws_security_group_rule" "bastion_to_postgres" {
   from_port                = 5432
   to_port                  = 5432
   protocol                 = "tcp"
-  source_security_group_id = data.aws_security_group.postgres_sg.id
-  security_group_id        = data.aws_security_group.bastion_sg.id
+  source_security_group_id = aws_security_group.postgres_sg.id
+  security_group_id        = aws_security_group.bastion_sg.id
   description              = "PostgreSQL to RDS"
 }
 
@@ -53,8 +88,8 @@ resource "aws_security_group_rule" "postgres_from_lambda" {
   from_port                = 5432
   to_port                  = 5432
   protocol                 = "tcp"
-  source_security_group_id = data.aws_security_group.lambda_sg.id
-  security_group_id        = data.aws_security_group.postgres_sg.id
+  source_security_group_id = aws_security_group.lambda_sg.id
+  security_group_id        = aws_security_group.postgres_sg.id
   description              = "PostgreSQL from Lambda"
 }
 
@@ -64,14 +99,22 @@ resource "aws_security_group_rule" "postgres_from_bastion" {
   from_port                = 5432
   to_port                  = 5432
   protocol                 = "tcp"
-  source_security_group_id = data.aws_security_group.bastion_sg.id
-  security_group_id        = data.aws_security_group.postgres_sg.id
+  source_security_group_id = aws_security_group.bastion_sg.id
+  security_group_id        = aws_security_group.postgres_sg.id
   description              = "PostgreSQL from Bastion"
 }
 
 # Use default VPC
 data "aws_vpc" "default" {
   default = true
+}
+
+# Get default subnets
+data "aws_subnets" "default" {
+  filter {
+    name   = "vpc-id"
+    values = [data.aws_vpc.default.id]
+  }
 }
 
 # Get Internet Gateway for the default VPC
@@ -145,8 +188,8 @@ data "aws_ami" "amazon_linux" {
 # Bastion host EC2 instance
 resource "aws_instance" "bastion" {
   ami                    = data.aws_ami.amazon_linux.id
-  instance_type          = "t3.micro" # Small, cost-effective instance
-  vpc_security_group_ids = [data.aws_security_group.bastion_sg.id]
+  instance_type          = "t3.micro"
+  vpc_security_group_ids = [aws_security_group.bastion_sg.id]
   iam_instance_profile   = aws_iam_instance_profile.bastion_profile.name
 
   # Use the first available subnet

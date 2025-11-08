@@ -1,0 +1,150 @@
+name: Terraform Destroy RDS and Security Groups
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_destroy:
+        description: 'Type "DESTROY" to confirm you want to destroy the RDS instance and security groups'
+        required: true
+        type: string
+
+jobs:
+  destroy_rds:
+    runs-on: ubuntu-latest
+    if: github.event.inputs.confirm_destroy == 'DESTROY'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3.1.2
+        with:
+          terraform_version: 1.12.1
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Terraform Init
+        working-directory: ./aws_deploy_infrastructure
+        run: terraform init
+
+      - name: Remove Security Groups from State
+        working-directory: ./aws_deploy_infrastructure
+        run: |
+          echo "Removing security groups from Terraform state..."
+          terraform state rm data.aws_security_group.lambda_sg || echo "lambda_sg not in state"
+          terraform state rm data.aws_security_group.bastion_sg || echo "bastion_sg not in state"
+          terraform state rm data.aws_security_group.postgres_sg || echo "postgres_sg not in state"
+          echo "Security groups removed from state"
+
+      - name: Destroy RDS Instance and Related Resources
+        working-directory: ./aws_deploy_infrastructure
+        env:
+          TF_VAR_db_admin_name: ${{ secrets.DB_ADMIN_NAME }}
+          TF_VAR_db_admin_pwd: ${{ secrets.DB_ADMIN_PWD }}
+          TF_VAR_anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          TF_VAR_notification_emails_str: ${{ secrets.NOTIFICATION_EMAILS }}
+          TF_VAR_from_email: ${{ secrets.FROM_EMAIL }}
+          TF_VAR_db_name: etenders
+        run: |
+          echo "Destroying RDS instance..."
+          terraform destroy -auto-approve \
+            -target=aws_db_instance.postgres \
+            -target=aws_db_subnet_group.postgres
+
+      - name: Destroy Bastion Host
+        working-directory: ./aws_deploy_infrastructure
+        env:
+          TF_VAR_db_admin_name: ${{ secrets.DB_ADMIN_NAME }}
+          TF_VAR_db_admin_pwd: ${{ secrets.DB_ADMIN_PWD }}
+          TF_VAR_anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          TF_VAR_notification_emails_str: ${{ secrets.NOTIFICATION_EMAILS }}
+          TF_VAR_from_email: ${{ secrets.FROM_EMAIL }}
+          TF_VAR_db_name: etenders
+        run: |
+          echo "Destroying bastion host..."
+          terraform destroy -auto-approve \
+            -target=aws_instance.bastion \
+            -target=aws_iam_instance_profile.bastion_profile \
+            -target=aws_iam_role_policy_attachment.bastion_ssm_policy \
+            -target=aws_iam_role.bastion_role
+
+      - name: Manual Cleanup - Delete Security Groups via AWS CLI
+        run: |
+          echo "Waiting 30 seconds for resources to fully detach..."
+          sleep 30
+
+          echo "Attempting to delete security groups..."
+
+          # Get security group IDs
+          LAMBDA_SG=$(aws ec2 describe-security-groups --filters "Name=group-name,Values=lambda-sg" --query "SecurityGroups[0].GroupId" --output text)
+          BASTION_SG=$(aws ec2 describe-security-groups --filters "Name=group-name,Values=bastion-sg" --query "SecurityGroups[0].GroupId" --output text)
+          POSTGRES_SG=$(aws ec2 describe-security-groups --filters "Name=group-name,Values=postgres-sg" --query "SecurityGroups[0].GroupId" --output text)
+
+          echo "Lambda SG: $LAMBDA_SG"
+          echo "Bastion SG: $BASTION_SG"
+          echo "Postgres SG: $POSTGRES_SG"
+
+          # Delete all rules from each security group first
+          if [ "$LAMBDA_SG" != "None" ] && [ -n "$LAMBDA_SG" ]; then
+            echo "Removing all rules from lambda-sg..."
+            aws ec2 describe-security-group-rules --filters "Name=group-id,Values=$LAMBDA_SG" --query "SecurityGroupRules[?!IsEgress].SecurityGroupRuleId" --output text | xargs -r -n 1 aws ec2 revoke-security-group-ingress --group-id $LAMBDA_SG --security-group-rule-ids || true
+            aws ec2 describe-security-group-rules --filters "Name=group-id,Values=$LAMBDA_SG" --query "SecurityGroupRules[?IsEgress].SecurityGroupRuleId" --output text | xargs -r -n 1 aws ec2 revoke-security-group-egress --group-id $LAMBDA_SG --security-group-rule-ids || true
+          fi
+
+          if [ "$BASTION_SG" != "None" ] && [ -n "$BASTION_SG" ]; then
+            echo "Removing all rules from bastion-sg..."
+            aws ec2 describe-security-group-rules --filters "Name=group-id,Values=$BASTION_SG" --query "SecurityGroupRules[?!IsEgress].SecurityGroupRuleId" --output text | xargs -r -n 1 aws ec2 revoke-security-group-ingress --group-id $BASTION_SG --security-group-rule-ids || true
+            aws ec2 describe-security-group-rules --filters "Name=group-id,Values=$BASTION_SG" --query "SecurityGroupRules[?IsEgress].SecurityGroupRuleId" --output text | xargs -r -n 1 aws ec2 revoke-security-group-egress --group-id $BASTION_SG --security-group-rule-ids || true
+          fi
+
+          if [ "$POSTGRES_SG" != "None" ] && [ -n "$POSTGRES_SG" ]; then
+            echo "Removing all rules from postgres-sg..."
+            aws ec2 describe-security-group-rules --filters "Name=group-id,Values=$POSTGRES_SG" --query "SecurityGroupRules[?!IsEgress].SecurityGroupRuleId" --output text | xargs -r -n 1 aws ec2 revoke-security-group-ingress --group-id $POSTGRES_SG --security-group-rule-ids || true
+            aws ec2 describe-security-group-rules --filters "Name=group-id,Values=$POSTGRES_SG" --query "SecurityGroupRules[?IsEgress].SecurityGroupRuleId" --output text | xargs -r -n 1 aws ec2 revoke-security-group-egress --group-id $POSTGRES_SG --security-group-rule-ids || true
+          fi
+
+          echo "Waiting 10 seconds after removing rules..."
+          sleep 10
+
+          # Now delete the security groups
+          if [ "$POSTGRES_SG" != "None" ] && [ -n "$POSTGRES_SG" ]; then
+            echo "Deleting postgres-sg..."
+            aws ec2 delete-security-group --group-id $POSTGRES_SG || echo "Failed to delete postgres-sg, may have dependencies"
+          fi
+
+          if [ "$BASTION_SG" != "None" ] && [ -n "$BASTION_SG" ]; then
+            echo "Deleting bastion-sg..."
+            aws ec2 delete-security-group --group-id $BASTION_SG || echo "Failed to delete bastion-sg, may have dependencies"
+          fi
+
+          if [ "$LAMBDA_SG" != "None" ] && [ -n "$LAMBDA_SG" ]; then
+            echo "Deleting lambda-sg..."
+            aws ec2 delete-security-group --group-id $LAMBDA_SG || echo "Failed to delete lambda-sg, may have dependencies"
+          fi
+
+          echo "Security group cleanup complete"
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## Destruction Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Resources Destroyed" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ RDS Instance (postgres-db)" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ DB Subnet Group" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Bastion Host" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Bastion IAM Role and Policies" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Security Groups (lambda-sg, bastion-sg, postgres-sg)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Next Steps" >> $GITHUB_STEP_SUMMARY
+          echo "1. Update GitHub secrets with new DB credentials:" >> $GITHUB_STEP_SUMMARY
+          echo "   - DB_ADMIN_NAME" >> $GITHUB_STEP_SUMMARY
+          echo "   - DB_ADMIN_PWD" >> $GITHUB_STEP_SUMMARY
+          echo "2. Revert security_groups.tf to use managed resources (not data sources)" >> $GITHUB_STEP_SUMMARY
+          echo "3. Run the regular terraform.yml workflow to recreate everything" >> $GITHUB_STEP_SUMMARY
