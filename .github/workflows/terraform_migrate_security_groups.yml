@@ -1,0 +1,214 @@
+name: Terraform Security Groups Migration (One-Time)
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_migration:
+        description: 'Type "MIGRATE" to confirm you want to run this migration'
+        required: true
+        type: string
+
+jobs:
+  migrate_security_groups:
+    runs-on: ubuntu-latest
+    if: github.event.inputs.confirm_migration == 'MIGRATE'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3.1.2
+        with:
+          terraform_version: 1.12.1
+          terraform_wrapper: false # Disable wrapper to get raw output
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Terraform Init
+        working-directory: ./aws_deploy_infrastructure
+        run: terraform init
+
+      - name: Get Current Security Group IDs
+        id: get_sg_ids
+        working-directory: ./aws_deploy_infrastructure
+        env:
+          TF_VAR_db_admin_name: ${{ secrets.DB_ADMIN_NAME }}
+          TF_VAR_db_admin_pwd: ${{ secrets.DB_ADMIN_PWD }}
+          TF_VAR_anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          TF_VAR_notification_emails_str: ${{ secrets.NOTIFICATION_EMAILS }}
+          TF_VAR_from_email: ${{ secrets.FROM_EMAIL }}
+          TF_VAR_db_name: etenders
+        run: |
+          echo "Getting security group IDs from current state..."
+
+          LAMBDA_SG_ID=$(terraform state show aws_security_group.lambda_sg 2>/dev/null | grep "id " | head -1 | awk '{print $3}' | tr -d '"')
+          BASTION_SG_ID=$(terraform state show aws_security_group.bastion_sg 2>/dev/null | grep "id " | head -1 | awk '{print $3}' | tr -d '"')
+          POSTGRES_SG_ID=$(terraform state show aws_security_group.postgres_sg 2>/dev/null | grep "id " | head -1 | awk '{print $3}' | tr -d '"')
+
+          echo "Lambda SG ID: $LAMBDA_SG_ID"
+          echo "Bastion SG ID: $BASTION_SG_ID"
+          echo "Postgres SG ID: $POSTGRES_SG_ID"
+
+          echo "lambda_sg_id=$LAMBDA_SG_ID" >> $GITHUB_OUTPUT
+          echo "bastion_sg_id=$BASTION_SG_ID" >> $GITHUB_OUTPUT
+          echo "postgres_sg_id=$POSTGRES_SG_ID" >> $GITHUB_OUTPUT
+
+      - name: Backup Current State
+        working-directory: ./aws_deploy_infrastructure
+        run: |
+          echo "Creating state backup..."
+          terraform state pull > state_backup_$(date +%Y%m%d_%H%M%S).json
+          echo "State backed up"
+
+      - name: Remove Security Groups from State
+        working-directory: ./aws_deploy_infrastructure
+        env:
+          TF_VAR_db_admin_name: ${{ secrets.DB_ADMIN_NAME }}
+          TF_VAR_db_admin_pwd: ${{ secrets.DB_ADMIN_PWD }}
+          TF_VAR_anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          TF_VAR_notification_emails_str: ${{ secrets.NOTIFICATION_EMAILS }}
+          TF_VAR_from_email: ${{ secrets.FROM_EMAIL }}
+          TF_VAR_db_name: etenders
+        run: |
+          echo "Removing security groups from state (NOT from AWS)..."
+          terraform state rm aws_security_group.lambda_sg || echo "Lambda SG not in state"
+          terraform state rm aws_security_group.bastion_sg || echo "Bastion SG not in state"
+          terraform state rm aws_security_group.postgres_sg || echo "Postgres SG not in state"
+          echo "Security groups removed from state"
+
+      - name: Re-import Security Groups
+        working-directory: ./aws_deploy_infrastructure
+        env:
+          TF_VAR_db_admin_name: ${{ secrets.DB_ADMIN_NAME }}
+          TF_VAR_db_admin_pwd: ${{ secrets.DB_ADMIN_PWD }}
+          TF_VAR_anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          TF_VAR_notification_emails_str: ${{ secrets.NOTIFICATION_EMAILS }}
+          TF_VAR_from_email: ${{ secrets.FROM_EMAIL }}
+          TF_VAR_db_name: etenders
+        run: |
+          echo "Re-importing security groups (without inline rules)..."
+
+          if [ -n "${{ steps.get_sg_ids.outputs.lambda_sg_id }}" ]; then
+            terraform import aws_security_group.lambda_sg ${{ steps.get_sg_ids.outputs.lambda_sg_id }}
+          fi
+
+          if [ -n "${{ steps.get_sg_ids.outputs.bastion_sg_id }}" ]; then
+            terraform import aws_security_group.bastion_sg ${{ steps.get_sg_ids.outputs.bastion_sg_id }}
+          fi
+
+          if [ -n "${{ steps.get_sg_ids.outputs.postgres_sg_id }}" ]; then
+            terraform import aws_security_group.postgres_sg ${{ steps.get_sg_ids.outputs.postgres_sg_id }}
+          fi
+
+          echo "Security groups re-imported"
+
+      - name: Terraform Plan After Migration
+        working-directory: ./aws_deploy_infrastructure
+        env:
+          TF_VAR_db_admin_name: ${{ secrets.DB_ADMIN_NAME }}
+          TF_VAR_db_admin_pwd: ${{ secrets.DB_ADMIN_PWD }}
+          TF_VAR_anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          TF_VAR_notification_emails_str: ${{ secrets.NOTIFICATION_EMAILS }}
+          TF_VAR_from_email: ${{ secrets.FROM_EMAIL }}
+          TF_VAR_db_name: etenders
+        run: |
+          echo "Checking what Terraform wants to do after migration..."
+          terraform plan -out=migration_plan.tfplan
+          echo ""
+          echo "=== REVIEW THE PLAN ABOVE ==="
+          echo "If it wants to:"
+          echo "  ✅ CREATE new aws_security_group_rule resources - GOOD"
+          echo "  ✅ UPDATE security groups (minor changes) - PROBABLY OK"
+          echo "  ❌ DESTROY or RECREATE security groups - BAD! STOP!"
+          echo "  ❌ DESTROY RDS instance - BAD! STOP!"
+
+      - name: Show Plan Summary
+        working-directory: ./aws_deploy_infrastructure
+        run: |
+          echo "## Migration Plan Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Security Group IDs" >> $GITHUB_STEP_SUMMARY
+          echo "- Lambda SG: \`${{ steps.get_sg_ids.outputs.lambda_sg_id }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- Bastion SG: \`${{ steps.get_sg_ids.outputs.bastion_sg_id }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- Postgres SG: \`${{ steps.get_sg_ids.outputs.postgres_sg_id }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Terraform Plan" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          terraform show -no-color migration_plan.tfplan >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Next Steps" >> $GITHUB_STEP_SUMMARY
+          echo "1. Review the plan above carefully" >> $GITHUB_STEP_SUMMARY
+          echo "2. If it looks safe (only creating rules, not destroying resources), run the apply job" >> $GITHUB_STEP_SUMMARY
+          echo "3. If it wants to destroy things, STOP and investigate" >> $GITHUB_STEP_SUMMARY
+
+  apply_migration:
+    needs: migrate_security_groups
+    runs-on: ubuntu-latest
+    environment: production # Requires manual approval
+    if: github.event.inputs.confirm_migration == 'MIGRATE'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3.1.2
+        with:
+          terraform_version: 1.12.1
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Terraform Init
+        working-directory: ./aws_deploy_infrastructure
+        run: terraform init
+
+      - name: Apply Migration
+        working-directory: ./aws_deploy_infrastructure
+        env:
+          TF_VAR_db_admin_name: ${{ secrets.DB_ADMIN_NAME }}
+          TF_VAR_db_admin_pwd: ${{ secrets.DB_ADMIN_PWD }}
+          TF_VAR_anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          TF_VAR_notification_emails_str: ${{ secrets.NOTIFICATION_EMAILS }}
+          TF_VAR_from_email: ${{ secrets.FROM_EMAIL }}
+          TF_VAR_db_name: etenders
+        run: |
+          echo "Applying migration..."
+          terraform apply -auto-approve
+
+      - name: Verify Migration Success
+        working-directory: ./aws_deploy_infrastructure
+        env:
+          TF_VAR_db_admin_name: ${{ secrets.DB_ADMIN_NAME }}
+          TF_VAR_db_admin_pwd: ${{ secrets.DB_ADMIN_PWD }}
+          TF_VAR_anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          TF_VAR_notification_emails_str: ${{ secrets.NOTIFICATION_EMAILS }}
+          TF_VAR_from_email: ${{ secrets.FROM_EMAIL }}
+          TF_VAR_db_name: etenders
+        run: |
+          echo "Verifying that security group rules are now separate resources..."
+          terraform state list | grep "aws_security_group_rule" || echo "WARNING: No separate rule resources found!"
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Migration Complete! ✅" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Security groups have been successfully migrated to use separate rule resources." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Verification" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          terraform state list | grep "aws_security_group" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "You can now use the regular terraform.yml workflow going forward." >> $GITHUB_STEP_SUMMARY
+          echo "This migration workflow should only be run once and can be deleted after success." >> $GITHUB_STEP_SUMMARY
