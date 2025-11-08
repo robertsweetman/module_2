@@ -88,7 +88,13 @@ async fn function_handler(event: LambdaEvent<SqsEvent>) -> Result<String, Error>
                 })?;
 
             // Mark tender as notified in database
-            mark_tender_as_notified(&pool, sns_message.resource_id)
+            // Parse resource_id from String to i64
+            let resource_id = sns_message.resource_id.parse::<i64>().map_err(|e| {
+                error!("Failed to parse resource_id: {}", e);
+                Error::from(format!("Invalid resource_id format: {}", e).as_str())
+            })?;
+
+            mark_tender_as_notified(&pool, resource_id)
                 .await
                 .map_err(|e| {
                     error!("Failed to mark tender as notified: {}", e);
