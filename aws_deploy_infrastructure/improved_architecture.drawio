@@ -1,0 +1,127 @@
+<mxfile host="app.diagrams.net" agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36" version="28.1.0">
+  <diagram name="Improved Architecture" id="improved-arch-diagram">
+    <mxGraphModel dx="1156" dy="770" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="827" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        
+        <mxCell id="title" value="IMPROVED ARCHITECTURE - SECURITY HARDENED" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=18;fontStyle=1;fontColor=#4CAF50;" vertex="1" parent="1">
+          <mxGeometry x="300" y="10" width="500" height="30" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="internet" value="Internet" style="ellipse;shape=cloud;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#232F3E;" vertex="1" parent="1">
+          <mxGeometry x="80" y="40" width="120" height="80" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="anthropic" value="Anthropic API (External)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFE6CC;strokeColor=#FF9900;" vertex="1" parent="1">
+          <mxGeometry x="280" y="50" width="120" height="60" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="aws-cloud" value="AWS Cloud - Default VPC (SECURED)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E8F5E8;strokeColor=#4CAF50;dashed=1;verticalAlign=top;fontStyle=1;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="60" y="180" width="880" height="580" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="igw" value="Internet Gateway" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#EBD4FF;strokeColor=#8C4FFF;" vertex="1" parent="1">
+          <mxGeometry x="200" y="240" width="80" height="60" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="subnet1" value="Public Subnet (eu-west-2a)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E8F5E8;strokeColor=#4CAF50;dashed=1;verticalAlign=top;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="100" y="340" width="200" height="120" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="bastion" value="Bastion Host EC2 (SSM Enabled)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E1F5FE;strokeColor=#0277BD;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="130" y="380" width="140" height="60" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="subnet2" value="Private Subnet (eu-west-2b)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF3E0;strokeColor=#FF9800;dashed=1;verticalAlign=top;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="350" y="340" width="300" height="200" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="lambda1" value="pdf_processing Lambda (VPC)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#C8E6C9;strokeColor=#4CAF50;" vertex="1" parent="1">
+          <mxGeometry x="370" y="380" width="120" height="40" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="lambda2" value="postgres_dataload Lambda (VPC)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#C8E6C9;strokeColor=#4CAF50;" vertex="1" parent="1">
+          <mxGeometry x="510" y="380" width="120" height="40" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="lambda3" value="ml_bid_predictor Lambda (VPC)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#C8E6C9;strokeColor=#4CAF50;" vertex="1" parent="1">
+          <mxGeometry x="370" y="440" width="120" height="40" as="geometry"/>
+        </mxCell>
+        
+        <mxCell id="lambda4" value="ai_summary Lambda (VPC)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#C8E6C9;strokeColor=#4CAF50;" vertex="1" parent="1">
+          <mxGeometry x="510" y="440" width="120" height="40" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="lambda5" value="sns_notification Lambda" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFE6CC;strokeColor=#FF9900;" vertex="1" parent="1">
+          <mxGeometry x="370" y="500" width="120" height="30" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="subnet3" value="Private Subnet (eu-west-2c)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFEBEE;strokeColor=#F44336;dashed=1;verticalAlign=top;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="700" y="480" width="220" height="200" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="rds" value="PostgreSQL RDS (SECURED)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#C8E6C9;strokeColor=#4CAF50;fontColor=#2E7D32;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="730" y="540" width="140" height="80" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="sg-lambda" value="Lambda Security Group (lambda-sg)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E8F5E8;strokeColor=#4CAF50;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="340" y="320" width="320" height="240" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="sg-bastion" value="Bastion Security Group (bastion-sg)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E1F5FE;strokeColor=#0277BD;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="110" y="320" width="180" height="160" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="sg-postgres" value="Postgres Security Group (postgres-sg) VPC ONLY" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#C8E6C9;strokeColor=#4CAF50;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="710" y="460" width="200" height="240" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="sqs1" value="PDF Processing Queue (SQS)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFE1F1;strokeColor=#FF4081;" vertex="1" parent="1">
+          <mxGeometry x="100" y="580" width="120" height="50" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="sqs2" value="ML Prediction Queue (SQS)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFE1F1;strokeColor=#FF4081;" vertex="1" parent="1">
+          <mxGeometry x="240" y="580" width="120" height="50" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="s3" value="Lambda Bucket (S3)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E8F8E8;strokeColor=#7AA116;" vertex="1" parent="1">
+          <mxGeometry x="400" y="580" width="120" height="60" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="ssm-note" value="SSM Session Manager Tunnel" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF9C4;strokeColor=#F57F17;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="130" y="320" width="140" height="30" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="legend" value="Security Improvements: Database isolated in VPC, Bastion host with SSM, Lambda VPC integration, No internet DB access" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E8F5E8;strokeColor=#4CAF50;dashed=1;align=left;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="100" y="700" width="500" height="50" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="edge1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#4CAF50;strokeWidth=2;" edge="1" parent="1" source="bastion" target="rds">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="edge2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#4CAF50;strokeWidth=2;" edge="1" parent="1" source="lambda1" target="rds">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="edge3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#4CAF50;strokeWidth=2;" edge="1" parent="1" source="lambda2" target="rds">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="edge4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#FF9800;strokeWidth=2;" edge="1" parent="1" source="lambda4" target="anthropic">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="edge5" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#4CAF50;strokeWidth=2;" edge="1" parent="1" source="lambda3" target="rds">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="blocked" value="BLOCKED" style="text;html=1;strokeColor=#FF0000;fillColor=#FFE5E5;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=14;fontStyle=1;fontColor=#FF0000;" vertex="1" parent="1">
+          <mxGeometry x="450" y="250" width="80" height="30" as="geometry" />
+        </mxCell>
+        
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

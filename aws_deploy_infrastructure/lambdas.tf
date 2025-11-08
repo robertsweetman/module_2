@@ -20,6 +20,12 @@ resource "aws_lambda_function" "pdf_processing" {
     ignore_changes = [source_code_hash]
   }
   
+  # VPC Configuration
+  vpc_config {
+    subnet_ids         = tolist(data.aws_subnets.default.ids)
+    security_group_ids = [aws_security_group.lambda_sg.id]
+  }
+  
   environment {
     variables = {
       RUST_BACKTRACE = "full"
@@ -46,6 +52,12 @@ resource "aws_lambda_function" "postgres_dataload" {
   depends_on = [aws_s3_bucket.lambda_bucket]
   lifecycle {
     ignore_changes = [source_code_hash]
+  }
+  
+  # VPC Configuration
+  vpc_config {
+    subnet_ids         = tolist(data.aws_subnets.default.ids)
+    security_group_ids = [aws_security_group.lambda_sg.id]
   }
   
   environment {
@@ -79,6 +91,12 @@ resource "aws_lambda_function" "get_data" {
     ignore_changes = [source_code_hash]
   }
   
+  # VPC Configuration
+  vpc_config {
+    subnet_ids         = tolist(data.aws_subnets.default.ids)
+    security_group_ids = [aws_security_group.lambda_sg.id]
+  }
+  
   environment {
     variables = {
       RUST_BACKTRACE  = "1"
@@ -103,6 +121,12 @@ resource "aws_lambda_function" "ml_bid_predictor" {
   depends_on = [aws_s3_bucket.lambda_bucket]
   lifecycle {
     ignore_changes = [source_code_hash]
+  }
+  
+  # VPC Configuration
+  vpc_config {
+    subnet_ids         = tolist(data.aws_subnets.default.ids)
+    security_group_ids = [aws_security_group.lambda_sg.id]
   }
   
   environment {
@@ -135,6 +159,12 @@ resource "aws_lambda_function" "ai_summary" {
   depends_on = [aws_s3_bucket.lambda_bucket]
   lifecycle {
     ignore_changes = [source_code_hash]
+  }
+  
+  # VPC Configuration
+  vpc_config {
+    subnet_ids         = tolist(data.aws_subnets.default.ids)
+    security_group_ids = [aws_security_group.lambda_sg.id]
   }
   
   environment {

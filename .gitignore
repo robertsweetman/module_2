@@ -16,3 +16,7 @@ mcp-server/node_modules/*
 python/.ipynb_checkpoints
 python/.venv/*
 python/__pycache__
+
+# drawio diagrams
+*.drawio
+*.xml

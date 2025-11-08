@@ -38,3 +38,37 @@ output "sqs_queue_url" {
   value = aws_sqs_queue.sns_queue.url
   description = "URL of the SNS notification queue"
 }
+
+# Bastion host outputs
+output "bastion_instance_id" {
+  description = "Instance ID of the bastion host"
+  value       = aws_instance.bastion.id
+}
+
+output "bastion_connect_command" {
+  description = "AWS CLI command to connect to bastion host via SSM"
+  value       = "aws ssm start-session --target ${aws_instance.bastion.id}"
+}
+
+output "database_tunnel_instructions" {
+  description = "Instructions for setting up a secure tunnel to the database"
+  value = <<-EOF
+To access the PostgreSQL database securely:
+
+1. Connect to bastion host:
+   aws ssm start-session --target ${aws_instance.bastion.id}
+
+2. Once connected, use the pre-installed connection script:
+   ./connect-db.sh
+
+3. Or connect directly with psql:
+   psql -h ${aws_db_instance.postgres.endpoint} -p 5432 -U ${var.db_admin_name} -d ${var.db_name}
+
+4. For port forwarding (access from your local machine):
+   aws ssm start-session --target ${aws_instance.bastion.id} \
+     --document-name AWS-StartPortForwardingSessionToRemoteHost \
+     --parameters host="${aws_db_instance.postgres.endpoint}",portNumber="5432",localPortNumber="5432"
+
+   Then connect locally: psql -h localhost -p 5432 -U ${var.db_admin_name} -d ${var.db_name}
+EOF
+}
