@@ -13,7 +13,7 @@ use std::str::FromStr;
 
 use pdf_processing::{extract_codes, extract_text_from_pdf};
 
-#[derive(Debug, Serialize, Deserialize, Clone, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 struct TenderRecord {
     title: String,
     resource_id: i64,
@@ -25,7 +25,7 @@ struct TenderRecord {
     status: String,
     pdf_url: String,
     awarddate: Option<NaiveDate>,
-    value: Option<f64>,
+    value: Option<BigDecimal>,
     cycle: String,
     bid: Option<i32>,
 }
