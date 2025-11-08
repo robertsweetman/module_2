@@ -1,19 +1,19 @@
-use lambda_runtime::{service_fn, LambdaEvent, Error};
-use serde::{Deserialize, Serialize};
-use scraper::{Html, Selector};
-use sqlx::{postgres::PgPoolOptions, Pool, Postgres};
-use std::env;
-use reqwest::Client;
 use aws_config;
 use aws_sdk_s3::Client as S3Client;
-use chrono::{NaiveDate, NaiveDateTime};
 use bigdecimal::BigDecimal;
+use chrono::{NaiveDate, NaiveDateTime};
+use lambda_runtime::{Error, LambdaEvent, service_fn};
 use regex::Regex;
+use reqwest::Client;
+use scraper::{Html, Selector};
+use serde::{Deserialize, Serialize};
+use sqlx::{Pool, Postgres, postgres::PgPoolOptions};
+use std::env;
 use std::str::FromStr;
 
 use pdf_processing::{extract_codes, extract_text_from_pdf};
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, Clone)]
 struct TenderRecord {
     title: String,
     resource_id: i64,
@@ -25,9 +25,9 @@ struct TenderRecord {
     status: String,
     pdf_url: String,
     awarddate: Option<NaiveDate>,
-    value: Option<BigDecimal>,
+    value: Option<f64>,
     cycle: String,
-    bid: Option<i32>, // 1 = bid, 0 = no bid, NULL = unlabeled
+    bid: Option<i32>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -97,11 +97,11 @@ async fn read_codes_from_storage(
     // Parse codes using the same approach as pdf_processing
     let codes: Vec<String> = content
         .lines()
-        .filter_map(|line| line.split(',').next())  // Take everything before first comma
+        .filter_map(|line| line.split(',').next()) // Take everything before first comma
         .map(|code| code.trim().to_string())
         .filter(|code| !code.is_empty())
         .collect();
-    
+
     println!("Loaded {} codes from {}", codes.len(), filename);
     Ok(codes)
 }
@@ -113,10 +113,18 @@ async fn function_handler(event: LambdaEvent<Request>) -> Result<Response, Error
     let test_mode = event.payload.test_mode.unwrap_or(false);
     let start_page = event.payload.start_page.unwrap_or(1);
     let offset = event.payload.offset.unwrap_or(0);
-    let max_pages = if test_mode { 1 } else { event.payload.max_pages.unwrap_or(10) };
+    let max_pages = if test_mode {
+        1
+    } else {
+        event.payload.max_pages.unwrap_or(10)
+    };
 
     // Calculate page range
-    let (actual_start, actual_end) = if offset > 0 { (1, offset + 1) } else { (start_page, start_page + max_pages) };
+    let (actual_start, actual_end) = if offset > 0 {
+        (1, offset + 1)
+    } else {
+        (start_page, start_page + max_pages)
+    };
 
     // Setup HTTP client
     println!("Creating HTTP client ...");
@@ -140,31 +148,54 @@ async fn function_handler(event: LambdaEvent<Request>) -> Result<Response, Error
 
     // Scrape tender pages
     println!("Scraping pages {}..{}", actual_start, actual_end - 1);
-    let records = get_table_content(&client, base_url, actual_start, actual_end, test_mode).await?;
+    let mut records =
+        get_table_content(&client, base_url, actual_start, actual_end, test_mode).await?;
     println!("Fetched {} tender records", records.len());
 
+    // Filter out records that already exist in DB (dedupe check)
     if let Some(pool_ref) = &pool {
-        println!("Persisting tender records...");
-        save_records(pool_ref, &records).await?;
-        println!("Tender records saved");
+        println!("Checking for existing records in database...");
+        let new_records = filter_new_records(pool_ref, &records).await?;
+        let filtered_count = records.len() - new_records.len();
+        if filtered_count > 0 {
+            println!(
+                "Filtered out {} existing records, processing {} new records",
+                filtered_count,
+                new_records.len()
+            );
+        }
+        records = new_records;
+    }
+
+    if let Some(pool_ref) = &pool {
+        if !records.is_empty() {
+            println!("Persisting {} new tender records...", records.len());
+            save_records(pool_ref, &records).await?;
+            println!("Tender records saved");
+        } else {
+            println!("No new records to save");
+        }
     }
 
     // Load detection codes from S3
     let bucket_name = env::var("LAMBDA_BUCKET_NAME")
         .map_err(|_| "LAMBDA_BUCKET_NAME environment variable not set")?;
-    
+
     // Initialize AWS S3 client
-    let aws_config = aws_config::defaults(aws_config::BehaviorVersion::latest()).load().await;
+    let aws_config = aws_config::defaults(aws_config::BehaviorVersion::latest())
+        .load()
+        .await;
     let s3_client = S3Client::new(&aws_config);
-    let storage = StorageBackend::S3 { 
-        client: s3_client, 
-        bucket: bucket_name 
+    let storage = StorageBackend::S3 {
+        client: s3_client,
+        bucket: bucket_name,
     };
-    
+
     // Read codes from S3
-    let codes = read_codes_from_storage(&storage, "codes.txt").await
+    let codes = read_codes_from_storage(&storage, "codes.txt")
+        .await
         .map_err(|e| format!("Failed to read codes from S3: {}", e))?;
-    
+
     if codes.len() > 0 {
         println!("First 5 codes: {:?}", &codes[..codes.len().min(5)]);
     } else {
@@ -208,12 +239,39 @@ async fn ensure_tender_table_exists(pool: &Pool<Postgres>) -> Result<(), Error> 
             value DECIMAL(15,2),
             cycle TEXT NOT NULL,
             bid INTEGER DEFAULT NULL,
+            notification_sent BOOLEAN DEFAULT FALSE,
+            notification_sent_at TIMESTAMP WITH TIME ZONE DEFAULT NULL,
             created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
         )
+        "#,
+    )
+    .execute(pool)
+    .await?;
+
+    // Add notification columns if they don't exist (for existing tables)
+    sqlx::query(
+        r#"
+        DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_name='tender_records' AND column_name='notification_sent'
+            ) THEN
+                ALTER TABLE tender_records ADD COLUMN notification_sent BOOLEAN DEFAULT FALSE;
+            END IF;
+
+            IF NOT EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_name='tender_records' AND column_name='notification_sent_at'
+            ) THEN
+                ALTER TABLE tender_records ADD COLUMN notification_sent_at TIMESTAMP WITH TIME ZONE DEFAULT NULL;
+            END IF;
+        END $$;
         "#
     )
     .execute(pool)
     .await?;
+
     Ok(())
 }
 
@@ -229,18 +287,40 @@ async fn ensure_pdf_table_exists(pool: &Pool<Postgres>) -> Result<(), Error> {
             detected_codes TEXT[],
             codes_count INTEGER DEFAULT 0
         )
-        "#
+        "#,
     )
     .execute(pool)
     .await?;
     Ok(())
 }
 
+async fn filter_new_records(
+    pool: &Pool<Postgres>,
+    records: &[TenderRecord],
+) -> Result<Vec<TenderRecord>, Error> {
+    let mut new_records = Vec::new();
+
+    for rec in records {
+        // Check if resource_id already exists in database
+        let exists: Option<(i64,)> =
+            sqlx::query_as("SELECT resource_id FROM tender_records WHERE resource_id = $1")
+                .bind(rec.resource_id)
+                .fetch_optional(pool)
+                .await?;
+
+        if exists.is_none() {
+            new_records.push(rec.clone());
+        }
+    }
+
+    Ok(new_records)
+}
+
 async fn save_records(pool: &Pool<Postgres>, records: &[TenderRecord]) -> Result<(), Error> {
     for rec in records {
         sqlx::query(
             r#"
-            INSERT INTO tender_records 
+            INSERT INTO tender_records
             (title, resource_id, ca, info, published, deadline, procedure, status, pdf_url, awarddate, value, cycle, bid)
             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
             ON CONFLICT (resource_id) DO UPDATE SET
@@ -255,7 +335,7 @@ async fn save_records(pool: &Pool<Postgres>, records: &[TenderRecord]) -> Result
                 awarddate = EXCLUDED.awarddate,
                 value = EXCLUDED.value,
                 cycle = EXCLUDED.cycle
-                -- Note: We don't update bid column to preserve existing labels
+                -- Note: We don't update bid column or notification fields to preserve existing data
             "#
         )
         .bind(&rec.title)
@@ -322,11 +402,20 @@ async fn process_pdf(
         err
     })?;
 
-    println!("Extracted {} characters from PDF {}", pdf_text.len(), record.resource_id);
-    
+    println!(
+        "Extracted {} characters from PDF {}",
+        pdf_text.len(),
+        record.resource_id
+    );
+
     let detected_codes = extract_codes(&pdf_text, codes);
-    println!("Detected {} codes in PDF {}: {:?}", detected_codes.len(), record.resource_id, detected_codes);
-    
+    println!(
+        "Detected {} codes in PDF {}: {:?}",
+        detected_codes.len(),
+        record.resource_id,
+        detected_codes
+    );
+
     // Debug: Show a sample of the PDF text to help with troubleshooting
     if pdf_text.chars().count() > 200 {
         let sample: String = pdf_text.chars().take(200).collect();
@@ -334,7 +423,7 @@ async fn process_pdf(
     } else {
         println!("Full PDF text: '{}'", pdf_text);
     }
-    
+
     store_pdf_content_with_codes(pool, record.resource_id, &pdf_text, &detected_codes).await?;
     Ok(())
 }
@@ -352,7 +441,10 @@ async fn get_table_content(
 
     for page in start_page..end_page {
         println!("Fetching page {}/{}", page, end_page - 1);
-        let url = format!("{}?d-3680175-p={}&searchType=cftFTS&latest=true", base_url, page);
+        let url = format!(
+            "{}?d-3680175-p={}&searchType=cftFTS&latest=true",
+            base_url, page
+        );
         let body = client.get(&url).send().await?.text().await?;
         let doc = Html::parse_document(&body);
         let row_sel = Selector::parse("tbody tr").unwrap();
@@ -369,25 +461,70 @@ async fn get_table_content(
             let award_sel = Selector::parse("td:nth-child(11)").unwrap();
             let value_sel = Selector::parse("td:nth-child(12)").unwrap();
 
-            let resource_id = row.select(&id_sel).next().map(|n| n.inner_html().trim().to_string()).unwrap_or_default();
-            let pdf_column = row.select(&pdf_sel).next().map(|n| n.inner_html().trim().to_string()).unwrap_or_default();
+            let resource_id = row
+                .select(&id_sel)
+                .next()
+                .map(|n| n.inner_html().trim().to_string())
+                .unwrap_or_default();
+            let pdf_column = row
+                .select(&pdf_sel)
+                .next()
+                .map(|n| n.inner_html().trim().to_string())
+                .unwrap_or_default();
             let pdf_url = if !pdf_column.is_empty() {
-                format!("https://www.etenders.gov.ie/epps/cft/downloadNoticeForAdvSearch.do?resourceId={}", resource_id)
-            } else { String::new() };
+                format!(
+                    "https://www.etenders.gov.ie/epps/cft/downloadNoticeForAdvSearch.do?resourceId={}",
+                    resource_id
+                )
+            } else {
+                String::new()
+            };
 
             // First collect raw data
             let raw_record = TenderRecordRaw {
-                title: row.select(&title_sel).next().map(|n| n.text().collect::<Vec<_>>().join("").trim().to_string()).unwrap_or_default(),
+                title: row
+                    .select(&title_sel)
+                    .next()
+                    .map(|n| n.text().collect::<Vec<_>>().join("").trim().to_string())
+                    .unwrap_or_default(),
                 resource_id: resource_id.parse::<i64>().unwrap(),
-                ca: row.select(&ca_sel).next().map(|n| n.inner_html().trim().to_string()).unwrap_or_default(),
+                ca: row
+                    .select(&ca_sel)
+                    .next()
+                    .map(|n| n.inner_html().trim().to_string())
+                    .unwrap_or_default(),
                 info: String::new(),
-                published: row.select(&pub_sel).next().map(|n| n.inner_html().trim().to_string()).unwrap_or_default(),
-                deadline: row.select(&deadline_sel).next().map(|n| n.inner_html().trim().to_string()).unwrap_or_default(),
-                procedure: row.select(&proc_sel).next().map(|n| n.inner_html().trim().to_string()).unwrap_or_default(),
-                status: row.select(&status_sel).next().map(|n| n.inner_html().trim().to_string()).unwrap_or_default(),
+                published: row
+                    .select(&pub_sel)
+                    .next()
+                    .map(|n| n.inner_html().trim().to_string())
+                    .unwrap_or_default(),
+                deadline: row
+                    .select(&deadline_sel)
+                    .next()
+                    .map(|n| n.inner_html().trim().to_string())
+                    .unwrap_or_default(),
+                procedure: row
+                    .select(&proc_sel)
+                    .next()
+                    .map(|n| n.inner_html().trim().to_string())
+                    .unwrap_or_default(),
+                status: row
+                    .select(&status_sel)
+                    .next()
+                    .map(|n| n.inner_html().trim().to_string())
+                    .unwrap_or_default(),
                 pdf_url,
-                awarddate: row.select(&award_sel).next().map(|n| n.inner_html().trim().to_string()).unwrap_or_default(),
-                value: row.select(&value_sel).next().map(|n| n.inner_html().trim().to_string()).unwrap_or_default(),
+                awarddate: row
+                    .select(&award_sel)
+                    .next()
+                    .map(|n| n.inner_html().trim().to_string())
+                    .unwrap_or_default(),
+                value: row
+                    .select(&value_sel)
+                    .next()
+                    .map(|n| n.inner_html().trim().to_string())
+                    .unwrap_or_default(),
                 cycle: String::new(),
             };
 
@@ -408,31 +545,33 @@ fn parse_irish_date(date_str: &str) -> Option<NaiveDate> {
     if date_str.is_empty() {
         return None;
     }
-    
+
     // Parse HTML scraping date format: "24/06/2025 17:24:53"
     if let Ok(date) = NaiveDate::parse_from_str(date_str, "%d/%m/%Y %H:%M:%S") {
         return Some(date);
     }
-    
+
     // Fallback formats (just in case)
     let fallback_formats = [
-        "%d/%m/%Y",                 // 25/12/2024
-        "%d-%m-%Y",                 // 25-12-2024
-        "%Y-%m-%d",                 // 2024-12-25 (ISO format)
+        "%d/%m/%Y", // 25/12/2024
+        "%d-%m-%Y", // 25-12-2024
+        "%Y-%m-%d", // 2024-12-25 (ISO format)
     ];
-    
+
     for format in &fallback_formats {
         if let Ok(date) = NaiveDate::parse_from_str(date_str, format) {
             return Some(date);
         }
     }
-    
+
     println!("Warning: Could not parse date: '{}'", date_str);
     None
 }
 
 fn parse_irish_datetime(dt_str: &str) -> Option<NaiveDateTime> {
-    if dt_str.is_empty() { return None; }
+    if dt_str.is_empty() {
+        return None;
+    }
     NaiveDateTime::parse_from_str(dt_str, "%d/%m/%Y %H:%M:%S").ok()
 }
 
@@ -440,22 +579,23 @@ fn parse_tender_value(value_str: &str) -> Option<BigDecimal> {
     if value_str.is_empty() {
         return None;
     }
-    
+
     // Create regex for parsing monetary values
     let value_regex = Regex::new(r"[€£$]?[\d,]+\.?\d*").unwrap();
-    
+
     if let Some(captures) = value_regex.find(value_str) {
-        let clean_value = captures.as_str()
+        let clean_value = captures
+            .as_str()
             .replace("€", "")
             .replace("£", "")
             .replace("$", "")
             .replace(",", "");
-            
+
         if let Ok(decimal_value) = BigDecimal::from_str(&clean_value) {
             return Some(decimal_value);
         }
     }
-    
+
     println!("Warning: Could not parse value: '{}'", value_str);
     None
 }
@@ -483,4 +623,4 @@ impl From<TenderRecordRaw> for TenderRecord {
 #[tokio::main]
 async fn main() -> Result<(), Error> {
     lambda_runtime::run(service_fn(function_handler)).await
-} 
+}

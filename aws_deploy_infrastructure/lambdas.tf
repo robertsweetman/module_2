@@ -205,3 +205,31 @@ resource "aws_lambda_function" "sns_notification" {
   timeout     = 60  # 1 minute for email notifications
   memory_size = 256 # Minimal memory for email sending
 }
+
+# EventBridge rule to trigger get_data Lambda daily at 09:00 UTC
+resource "aws_cloudwatch_event_rule" "daily_tender_scan" {
+  name                = "daily-tender-scan"
+  description         = "Trigger tender scanning every day at 09:00 UTC"
+  schedule_expression = "cron(0 9 * * ? *)"
+}
+
+resource "aws_cloudwatch_event_target" "daily_tender_scan_target" {
+  rule      = aws_cloudwatch_event_rule.daily_tender_scan.name
+  target_id = "get-data-lambda"
+  arn       = aws_lambda_function.get_data.arn
+
+  input = jsonencode({
+    max_pages  = 10
+    test_mode  = false
+    start_page = 1
+  })
+}
+
+# Permission for EventBridge to invoke Lambda
+resource "aws_lambda_permission" "allow_eventbridge_get_data" {
+  statement_id  = "AllowExecutionFromEventBridge"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.get_data.function_name
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.daily_tender_scan.arn
+}
