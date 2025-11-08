@@ -12,7 +12,7 @@ resource "aws_db_instance" "postgres" {
   skip_final_snapshot = true  # Set to false for production
   publicly_accessible = false # Set to false for production
 
-  vpc_security_group_ids = [aws_security_group.postgres_sg.id]
+  vpc_security_group_ids = [data.aws_security_group.postgres_sg.id]
   db_subnet_group_name   = aws_db_subnet_group.postgres.name
 
   tags = {
