@@ -1,0 +1,189 @@
+name: Terraform Security Groups Migration v2 (Simpler)
+
+on:
+  workflow_dispatch:
+    inputs:
+      step:
+        description: 'Which step to run?'
+        required: true
+        type: choice
+        options:
+          - '1-import-rules'
+          - '2-apply-changes'
+          - '3-verify'
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3.1.2
+        with:
+          terraform_version: 1.12.1
+          terraform_wrapper: false
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Terraform Init
+        working-directory: ./aws_deploy_infrastructure
+        run: terraform init
+
+      # STEP 1: Import the new rule resources
+      - name: Step 1 - Import Security Group Rules
+        if: github.event.inputs.step == '1-import-rules'
+        working-directory: ./aws_deploy_infrastructure
+        env:
+          TF_VAR_db_admin_name: ${{ secrets.DB_ADMIN_NAME }}
+          TF_VAR_db_admin_pwd: ${{ secrets.DB_ADMIN_PWD }}
+          TF_VAR_anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          TF_VAR_notification_emails_str: ${{ secrets.NOTIFICATION_EMAILS }}
+          TF_VAR_from_email: ${{ secrets.FROM_EMAIL }}
+          TF_VAR_db_name: etenders
+        run: |
+          echo "=== Getting Security Group IDs ==="
+          LAMBDA_SG=$(terraform state show aws_security_group.lambda_sg 2>/dev/null | grep "id " | head -1 | awk '{print $3}' | tr -d '"')
+          BASTION_SG=$(terraform state show aws_security_group.bastion_sg 2>/dev/null | grep "id " | head -1 | awk '{print $3}' | tr -d '"')
+          POSTGRES_SG=$(terraform state show aws_security_group.postgres_sg 2>/dev/null | grep "id " | head -1 | awk '{print $3}' | tr -d '"')
+
+          echo "Lambda SG: $LAMBDA_SG"
+          echo "Bastion SG: $BASTION_SG"
+          echo "Postgres SG: $POSTGRES_SG"
+
+          echo ""
+          echo "=== Getting Security Group Rule IDs from AWS ==="
+
+          # Get Lambda egress rule to Postgres
+          LAMBDA_TO_PG_RULE=$(aws ec2 describe-security-group-rules \
+            --filters "Name=group-id,Values=$LAMBDA_SG" \
+            --query "SecurityGroupRules[?IsEgress==\`true\` && IpProtocol==\`tcp\` && FromPort==\`5432\` && ReferencedGroupInfo.GroupId==\`$POSTGRES_SG\`].GroupRuleId" \
+            --output text)
+
+          # Get Bastion egress rule to Postgres
+          BASTION_TO_PG_RULE=$(aws ec2 describe-security-group-rules \
+            --filters "Name=group-id,Values=$BASTION_SG" \
+            --query "SecurityGroupRules[?IsEgress==\`true\` && IpProtocol==\`tcp\` && FromPort==\`5432\` && ReferencedGroupInfo.GroupId==\`$POSTGRES_SG\`].GroupRuleId" \
+            --output text)
+
+          # Get Postgres ingress rule from Lambda
+          PG_FROM_LAMBDA_RULE=$(aws ec2 describe-security-group-rules \
+            --filters "Name=group-id,Values=$POSTGRES_SG" \
+            --query "SecurityGroupRules[?IsEgress==\`false\` && IpProtocol==\`tcp\` && FromPort==\`5432\` && ReferencedGroupInfo.GroupId==\`$LAMBDA_SG\`].GroupRuleId" \
+            --output text)
+
+          # Get Postgres ingress rule from Bastion
+          PG_FROM_BASTION_RULE=$(aws ec2 describe-security-group-rules \
+            --filters "Name=group-id,Values=$POSTGRES_SG" \
+            --query "SecurityGroupRules[?IsEgress==\`false\` && IpProtocol==\`tcp\` && FromPort==\`5432\` && ReferencedGroupInfo.GroupId==\`$BASTION_SG\`].GroupRuleId" \
+            --output text)
+
+          echo "Lambda -> Postgres rule: $LAMBDA_TO_PG_RULE"
+          echo "Bastion -> Postgres rule: $BASTION_TO_PG_RULE"
+          echo "Postgres <- Lambda rule: $PG_FROM_LAMBDA_RULE"
+          echo "Postgres <- Bastion rule: $PG_FROM_BASTION_RULE"
+
+          echo ""
+          echo "=== Importing Rules into Terraform State ==="
+
+          if [ -n "$LAMBDA_TO_PG_RULE" ]; then
+            echo "Importing lambda_to_postgres..."
+            terraform import aws_security_group_rule.lambda_to_postgres "$LAMBDA_TO_PG_RULE" || echo "Rule already imported or doesn't exist"
+          fi
+
+          if [ -n "$BASTION_TO_PG_RULE" ]; then
+            echo "Importing bastion_to_postgres..."
+            terraform import aws_security_group_rule.bastion_to_postgres "$BASTION_TO_PG_RULE" || echo "Rule already imported or doesn't exist"
+          fi
+
+          if [ -n "$PG_FROM_LAMBDA_RULE" ]; then
+            echo "Importing postgres_from_lambda..."
+            terraform import aws_security_group_rule.postgres_from_lambda "$PG_FROM_LAMBDA_RULE" || echo "Rule already imported or doesn't exist"
+          fi
+
+          if [ -n "$PG_FROM_BASTION_RULE" ]; then
+            echo "Importing postgres_from_bastion..."
+            terraform import aws_security_group_rule.postgres_from_bastion "$PG_FROM_BASTION_RULE" || echo "Rule already imported or doesn't exist"
+          fi
+
+          echo ""
+          echo "=== Import Complete ==="
+          echo "Now run Step 2 to apply changes"
+
+      # STEP 2: Apply changes with target
+      - name: Step 2 - Apply Changes to Security Groups
+        if: github.event.inputs.step == '2-apply-changes'
+        working-directory: ./aws_deploy_infrastructure
+        env:
+          TF_VAR_db_admin_name: ${{ secrets.DB_ADMIN_NAME }}
+          TF_VAR_db_admin_pwd: ${{ secrets.DB_ADMIN_PWD }}
+          TF_VAR_anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          TF_VAR_notification_emails_str: ${{ secrets.NOTIFICATION_EMAILS }}
+          TF_VAR_from_email: ${{ secrets.FROM_EMAIL }}
+          TF_VAR_db_name: etenders
+        run: |
+          echo "=== Planning Changes ==="
+          terraform plan -out=migration.tfplan
+
+          echo ""
+          echo "=== Applying Changes ==="
+          terraform apply -auto-approve migration.tfplan
+
+          echo ""
+          echo "=== Migration Complete ==="
+
+      # STEP 3: Verify migration
+      - name: Step 3 - Verify Migration
+        if: github.event.inputs.step == '3-verify'
+        working-directory: ./aws_deploy_infrastructure
+        env:
+          TF_VAR_db_admin_name: ${{ secrets.DB_ADMIN_NAME }}
+          TF_VAR_db_admin_pwd: ${{ secrets.DB_ADMIN_PWD }}
+          TF_VAR_anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          TF_VAR_notification_emails_str: ${{ secrets.NOTIFICATION_EMAILS }}
+          TF_VAR_from_email: ${{ secrets.FROM_EMAIL }}
+          TF_VAR_db_name: etenders
+        run: |
+          echo "=== Checking State ==="
+          terraform state list | grep security_group
+
+          echo ""
+          echo "=== Verifying No Pending Changes ==="
+          terraform plan -detailed-exitcode
+
+          if [ $? -eq 0 ]; then
+            echo ""
+            echo "✅ Migration successful! No pending changes."
+          else
+            echo ""
+            echo "⚠️  There are still pending changes. Review the plan above."
+          fi
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## Migration Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Step completed: **${{ github.event.inputs.step }}**" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ github.event.inputs.step }}" == "1-import-rules" ]; then
+            echo "### Next Steps" >> $GITHUB_STEP_SUMMARY
+            echo "1. Review the import results above" >> $GITHUB_STEP_SUMMARY
+            echo "2. Run step **2-apply-changes** to apply the migration" >> $GITHUB_STEP_SUMMARY
+          elif [ "${{ github.event.inputs.step }}" == "2-apply-changes" ]; then
+            echo "### Next Steps" >> $GITHUB_STEP_SUMMARY
+            echo "1. Run step **3-verify** to confirm migration was successful" >> $GITHUB_STEP_SUMMARY
+          elif [ "${{ github.event.inputs.step }}" == "3-verify" ]; then
+            echo "### Migration Complete! 🎉" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "You can now use the regular terraform.yml workflow." >> $GITHUB_STEP_SUMMARY
+            echo "This migration workflow can be deleted." >> $GITHUB_STEP_SUMMARY
+          fi

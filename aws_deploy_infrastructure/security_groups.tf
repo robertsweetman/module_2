@@ -25,6 +25,10 @@ resource "aws_security_group" "lambda_sg" {
   tags = {
     Name = "lambda-sg"
   }
+
+  lifecycle {
+    ignore_changes = [ingress, egress]
+  }
 }
 
 # Security group for bastion host (no cross-references in inline rules)
@@ -45,6 +49,10 @@ resource "aws_security_group" "bastion_sg" {
   tags = {
     Name = "bastion-sg"
   }
+
+  lifecycle {
+    ignore_changes = [ingress, egress]
+  }
 }
 
 # Create a security group for the RDS instance (no cross-references in inline rules)
@@ -55,6 +63,10 @@ resource "aws_security_group" "postgres_sg" {
 
   tags = {
     Name = "postgres-sg"
+  }
+
+  lifecycle {
+    ignore_changes = [ingress, egress]
   }
 }
 
