@@ -4,7 +4,7 @@ resource "aws_security_group" "lambda_sg" {
   description = "Security group for Lambda functions"
   vpc_id      = data.aws_vpc.default.id
 
-  # Allow HTTPS outbound for external API calls (e.g., Anthropic API)
+  # Allow HTTPS outbound for VPC endpoints and external API calls
   egress {
     description = "HTTPS outbound"
     from_port   = 443
@@ -20,6 +20,15 @@ resource "aws_security_group" "lambda_sg" {
     to_port     = 80
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  # Allow PostgreSQL outbound to RDS
+  egress {
+    description = "PostgreSQL outbound"
+    from_port   = 5432
+    to_port     = 5432
+    protocol    = "tcp"
+    cidr_blocks = [data.aws_vpc.default.cidr_block]
   }
 
   tags = {
@@ -42,6 +51,15 @@ resource "aws_security_group" "bastion_sg" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
+  # Allow PostgreSQL outbound to RDS
+  egress {
+    description = "PostgreSQL outbound"
+    from_port   = 5432
+    to_port     = 5432
+    protocol    = "tcp"
+    cidr_blocks = [data.aws_vpc.default.cidr_block]
+  }
+
   tags = {
     Name = "bastion-sg"
   }
@@ -53,55 +71,27 @@ resource "aws_security_group" "postgres_sg" {
   description = "Allow PostgreSQL inbound traffic from Lambda and Bastion only"
   vpc_id      = data.aws_vpc.default.id
 
+  # Allow PostgreSQL from Lambda
+  ingress {
+    description     = "PostgreSQL from Lambda"
+    from_port       = 5432
+    to_port         = 5432
+    protocol        = "tcp"
+    security_groups = [aws_security_group.lambda_sg.id]
+  }
+
+  # Allow PostgreSQL from Bastion
+  ingress {
+    description     = "PostgreSQL from Bastion"
+    from_port       = 5432
+    to_port         = 5432
+    protocol        = "tcp"
+    security_groups = [aws_security_group.bastion_sg.id]
+  }
+
   tags = {
     Name = "postgres-sg"
   }
-}
-
-# Separate security group rules to avoid circular dependencies
-
-# Allow Lambda to connect to RDS
-resource "aws_security_group_rule" "lambda_to_postgres" {
-  type                     = "egress"
-  from_port                = 5432
-  to_port                  = 5432
-  protocol                 = "tcp"
-  source_security_group_id = aws_security_group.postgres_sg.id
-  security_group_id        = aws_security_group.lambda_sg.id
-  description              = "PostgreSQL to RDS"
-}
-
-# Allow Bastion to connect to RDS
-resource "aws_security_group_rule" "bastion_to_postgres" {
-  type                     = "egress"
-  from_port                = 5432
-  to_port                  = 5432
-  protocol                 = "tcp"
-  source_security_group_id = aws_security_group.postgres_sg.id
-  security_group_id        = aws_security_group.bastion_sg.id
-  description              = "PostgreSQL to RDS"
-}
-
-# Allow RDS to receive connections from Lambda
-resource "aws_security_group_rule" "postgres_from_lambda" {
-  type                     = "ingress"
-  from_port                = 5432
-  to_port                  = 5432
-  protocol                 = "tcp"
-  source_security_group_id = aws_security_group.lambda_sg.id
-  security_group_id        = aws_security_group.postgres_sg.id
-  description              = "PostgreSQL from Lambda"
-}
-
-# Allow RDS to receive connections from Bastion
-resource "aws_security_group_rule" "postgres_from_bastion" {
-  type                     = "ingress"
-  from_port                = 5432
-  to_port                  = 5432
-  protocol                 = "tcp"
-  source_security_group_id = aws_security_group.bastion_sg.id
-  security_group_id        = aws_security_group.postgres_sg.id
-  description              = "PostgreSQL from Bastion"
 }
 
 # Use default VPC
