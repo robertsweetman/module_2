@@ -25,7 +25,7 @@ impl Database {
 
     async fn ensure_ml_processed_column(&self) -> Result<()> {
         // Check if ml_processed column exists
-        let column_exists_query = r#"
+        let ml_processed_exists_query = r#"
             SELECT EXISTS (
                 SELECT 1 FROM information_schema.columns
                 WHERE table_name = 'tender_records'
@@ -33,12 +33,12 @@ impl Database {
             )
         "#;
 
-        let column_exists: bool = sqlx::query_scalar::<_, bool>(column_exists_query)
+        let ml_processed_exists: bool = sqlx::query_scalar::<_, bool>(ml_processed_exists_query)
             .fetch_one(&self.pool)
             .await?;
 
-        if !column_exists {
-            info!("Adding ml_processed column to tender_records table");
+        if !ml_processed_exists {
+            info!("Adding ml_processed and related columns to tender_records table");
             let add_column_query = r#"
                 ALTER TABLE tender_records
                 ADD COLUMN ml_processed BOOLEAN DEFAULT FALSE,
@@ -52,9 +52,39 @@ impl Database {
                 .await
                 .context("Failed to add ml_processed column")?;
 
-            info!("Successfully added ml_processed column");
+            info!("Successfully added ml_processed and related columns");
         } else {
             info!("ml_processed column already exists");
+
+            // Check if ml_status column exists (might be missing from older schema)
+            let ml_status_exists_query = r#"
+                SELECT EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name = 'tender_records'
+                    AND column_name = 'ml_status'
+                )
+            "#;
+
+            let ml_status_exists: bool = sqlx::query_scalar::<_, bool>(ml_status_exists_query)
+                .fetch_one(&self.pool)
+                .await?;
+
+            if !ml_status_exists {
+                info!("Adding ml_status column to tender_records table");
+                let add_ml_status_query = r#"
+                    ALTER TABLE tender_records
+                    ADD COLUMN ml_status VARCHAR(20) DEFAULT 'pending'
+                "#;
+
+                sqlx::query(add_ml_status_query)
+                    .execute(&self.pool)
+                    .await
+                    .context("Failed to add ml_status column")?;
+
+                info!("Successfully added ml_status column");
+            } else {
+                info!("ml_status column already exists");
+            }
         }
 
         Ok(())
