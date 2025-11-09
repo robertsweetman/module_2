@@ -48,21 +48,21 @@ resource "aws_iam_role_policy" "lambda_rds_access" {
 }
 
 resource "aws_iam_role_policy" "lambda_s3_access" {
-    name = "lambdas_s3_access"
-    role = aws_iam_role.lambda_role.id
+  name = "lambdas_s3_access"
+  role = aws_iam_role.lambda_role.id
 
-    policy = jsonencode({
-        Version = "2012-10-17"
-        Statement = [
-            {
-                Effect = "Allow"
-                Action = [
-                    "s3:*"
-                ]
-                Resource = "*"
-            }
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:*"
         ]
-    })
+        Resource = "*"
+      }
+    ]
+  })
 }
 
 # SNS publishing policy for ML prediction notifications
@@ -105,6 +105,35 @@ resource "aws_iam_role_policy" "lambda_ses_access" {
           "ses:GetSendStatistics"
         ]
         Resource = "*"
+      }
+    ]
+  })
+}
+
+# SQS access policy for Lambda functions
+resource "aws_iam_role_policy" "lambda_sqs_access" {
+  name = "lambda_sqs_access"
+  role = aws_iam_role.lambda_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "sqs:ReceiveMessage",
+          "sqs:DeleteMessage",
+          "sqs:GetQueueAttributes",
+          "sqs:SendMessage",
+          "sqs:GetQueueUrl"
+        ]
+        Resource = [
+          aws_sqs_queue.pdf_processing_queue.arn,
+          aws_sqs_queue.ml_prediction_queue.arn,
+          aws_sqs_queue.ai_summary_queue.arn,
+          aws_sqs_queue.sns_queue.arn,
+          aws_sqs_queue.tender_processing_queue.arn
+        ]
       }
     ]
   })
