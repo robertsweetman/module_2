@@ -209,8 +209,8 @@ resource "aws_lambda_function" "sns_notification" {
 # EventBridge rule to trigger postgres_dataload Lambda daily at 11:00 UTC (12:00 UK time)
 resource "aws_cloudwatch_event_rule" "daily_tender_scan" {
   name                = "daily-tender-scan"
-  description         = "Trigger tender scanning every day at 11:00 UTC (12:00 UK time)"
-  schedule_expression = "cron(0 11 * * ? *)"
+  description         = "Trigger tender scanning every day at 12:30 UK time"
+  schedule_expression = "cron(30 12 * * ? *)"
 }
 
 resource "aws_cloudwatch_event_target" "daily_tender_scan_target" {
