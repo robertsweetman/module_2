@@ -100,6 +100,13 @@ jobs:
         run: |
           cargo lambda build --release --target x86_64-unknown-linux-musl --package sns_notification
 
+      - name: Package ETenders Scraper Lambda
+        if: ${{ inputs.lambda == 'all' || inputs.lambda == 'etenders_scraper' }}
+        run: |
+          cp ./target/lambda/etenders_scraper/bootstrap ./bootstrap
+          zip etenders_scraper.zip bootstrap
+          rm bootstrap
+
       - name: Package Postgres Dataload Lambda
         if: ${{ inputs.lambda == 'all' || inputs.lambda == 'postgres_dataload' }}
         run: |
@@ -162,8 +169,11 @@ jobs:
           fi
 
       - name: Upload to S3
-        if: ${{ inputs.lambda == 'all' || inputs.lambda == 'postgres_dataload' || inputs.lambda == 'pdf_processing' || inputs.lambda == 'get_data' || inputs.lambda == 'ml_bid_predictor' || inputs.lambda == 'ai_summary' || inputs.lambda == 'sns_notification' }}
+        if: ${{ inputs.lambda == 'all' || inputs.lambda == 'etenders_scraper' || inputs.lambda == 'postgres_dataload' || inputs.lambda == 'pdf_processing' || inputs.lambda == 'get_data' || inputs.lambda == 'ml_bid_predictor' || inputs.lambda == 'ai_summary' || inputs.lambda == 'sns_notification' }}
         run: |
+          if [[ "${{ inputs.lambda }}" == "etenders_scraper" || "${{ inputs.lambda }}" == "all" ]]; then
+            aws s3 cp etenders_scraper.zip s3://$LAMBDA_BUCKET/etenders_scraper.zip
+          fi
           if [[ "${{ inputs.lambda }}" == "postgres_dataload" || "${{ inputs.lambda }}" == "all" ]]; then
             aws s3 cp postgres_dataload.zip s3://$LAMBDA_BUCKET/postgres_dataload.zip
           fi
@@ -184,8 +194,11 @@ jobs:
           fi
 
       - name: Update Lambda Functions
-        if: ${{ inputs.lambda == 'all' || inputs.lambda == 'postgres_dataload' || inputs.lambda == 'pdf_processing' || inputs.lambda == 'get_data' || inputs.lambda == 'ml_bid_predictor' || inputs.lambda == 'ai_summary' || inputs.lambda == 'sns_notification' }}
+        if: ${{ inputs.lambda == 'all' || inputs.lambda == 'etenders_scraper' || inputs.lambda == 'postgres_dataload' || inputs.lambda == 'pdf_processing' || inputs.lambda == 'get_data' || inputs.lambda == 'ml_bid_predictor' || inputs.lambda == 'ai_summary' || inputs.lambda == 'sns_notification' }}
         run: |
+          if [[ "${{ inputs.lambda }}" == "etenders_scraper" || "${{ inputs.lambda }}" == "all" ]]; then
+            aws lambda update-function-code --function-name etenders_scraper --s3-bucket $LAMBDA_BUCKET --s3-key etenders_scraper.zip
+          fi
           if [[ "${{ inputs.lambda }}" == "postgres_dataload" || "${{ inputs.lambda }}" == "all" ]]; then
             aws lambda update-function-code --function-name postgres_dataload --s3-bucket $LAMBDA_BUCKET --s3-key postgres_dataload.zip
           fi
