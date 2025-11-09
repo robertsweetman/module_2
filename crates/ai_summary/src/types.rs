@@ -1,6 +1,6 @@
-use serde::{Deserialize, Serialize};
-use chrono::{DateTime, Utc, NaiveDateTime, NaiveDate};
 use bigdecimal::BigDecimal;
+use chrono::{DateTime, NaiveDate, NaiveDateTime, Utc};
+use serde::{Deserialize, Serialize};
 
 /// Enum to handle different message types that can be sent to AI Summary Lambda
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -18,7 +18,7 @@ pub struct AISummaryMessage {
     pub ml_prediction: MLPredictionResult,
     #[serde(default)]
     pub pdf_content: String, // May be truncated/empty - we'll fetch full content if needed
-    pub priority: String,    // "URGENT" or "NORMAL"
+    pub priority: String, // "URGENT" or "NORMAL"
     pub timestamp: DateTime<Utc>,
 }
 
@@ -73,6 +73,11 @@ pub struct TenderRecord {
     pub detected_codes: Option<Vec<String>>,
     pub codes_count: Option<i32>,
     pub processing_stage: Option<String>,
+    pub ml_processed: Option<bool>,
+    pub ml_bid: Option<bool>,
+    pub ml_confidence: Option<BigDecimal>,
+    pub ml_reasoning: Option<String>,
+    pub ml_status: Option<String>,
 }
 
 /// PDF content from the pdf_content table
@@ -101,10 +106,10 @@ pub struct AISummaryResult {
 /// SNS message structure for notifications
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SNSMessage {
-    pub message_type: String,       // "AI_SUMMARY_COMPLETE"
+    pub message_type: String, // "AI_SUMMARY_COMPLETE"
     pub resource_id: String,
     pub title: String,
-    pub priority: String,           // "HIGH", "URGENT", "LOW"
+    pub priority: String, // "HIGH", "URGENT", "LOW"
     pub summary: String,
     pub action_required: String,
     pub timestamp: DateTime<Utc>,
@@ -127,7 +132,7 @@ impl Config {
             anthropic_api_key: std::env::var("ANTHROPIC_API_KEY")
                 .map_err(|_| anyhow::anyhow!("ANTHROPIC_API_KEY not set"))?,
             sns_queue_url: std::env::var("SNS_QUEUE_URL")
-                .map_err(|_| anyhow::anyhow!("SNS_QUEUE_URL not set"))?
+                .map_err(|_| anyhow::anyhow!("SNS_QUEUE_URL not set"))?,
         })
     }
 }
