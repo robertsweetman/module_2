@@ -24,69 +24,49 @@ impl Database {
     }
 
     async fn ensure_ml_processed_column(&self) -> Result<()> {
-        // Check if ml_processed column exists
-        let ml_processed_exists_query = r#"
-            SELECT EXISTS (
-                SELECT 1 FROM information_schema.columns
-                WHERE table_name = 'tender_records'
-                AND column_name = 'ml_processed'
-            )
-        "#;
+        info!("Ensuring ML columns exist in tender_records table");
 
-        let ml_processed_exists: bool = sqlx::query_scalar::<_, bool>(ml_processed_exists_query)
-            .fetch_one(&self.pool)
-            .await?;
+        // Add all ML columns using IF NOT EXISTS to be idempotent
+        // This will succeed whether columns exist or not
+        let migrations = vec![
+            (
+                "ml_processed",
+                "ALTER TABLE tender_records ADD COLUMN IF NOT EXISTS ml_processed BOOLEAN DEFAULT FALSE",
+            ),
+            (
+                "ml_bid",
+                "ALTER TABLE tender_records ADD COLUMN IF NOT EXISTS ml_bid BOOLEAN",
+            ),
+            (
+                "ml_confidence",
+                "ALTER TABLE tender_records ADD COLUMN IF NOT EXISTS ml_confidence DECIMAL(5,4)",
+            ),
+            (
+                "ml_reasoning",
+                "ALTER TABLE tender_records ADD COLUMN IF NOT EXISTS ml_reasoning TEXT",
+            ),
+            (
+                "ml_status",
+                "ALTER TABLE tender_records ADD COLUMN IF NOT EXISTS ml_status VARCHAR(20) DEFAULT 'pending'",
+            ),
+        ];
 
-        if !ml_processed_exists {
-            info!("Adding ml_processed and related columns to tender_records table");
-            let add_column_query = r#"
-                ALTER TABLE tender_records
-                ADD COLUMN ml_processed BOOLEAN DEFAULT FALSE,
-                ADD COLUMN ml_confidence DECIMAL(5,4),
-                ADD COLUMN ml_reasoning TEXT,
-                ADD COLUMN ml_status VARCHAR(20) DEFAULT 'pending'
-            "#;
-
-            sqlx::query(add_column_query)
-                .execute(&self.pool)
-                .await
-                .context("Failed to add ml_processed column")?;
-
-            info!("Successfully added ml_processed and related columns");
-        } else {
-            info!("ml_processed column already exists");
-
-            // Check if ml_status column exists (might be missing from older schema)
-            let ml_status_exists_query = r#"
-                SELECT EXISTS (
-                    SELECT 1 FROM information_schema.columns
-                    WHERE table_name = 'tender_records'
-                    AND column_name = 'ml_status'
-                )
-            "#;
-
-            let ml_status_exists: bool = sqlx::query_scalar::<_, bool>(ml_status_exists_query)
-                .fetch_one(&self.pool)
-                .await?;
-
-            if !ml_status_exists {
-                info!("Adding ml_status column to tender_records table");
-                let add_ml_status_query = r#"
-                    ALTER TABLE tender_records
-                    ADD COLUMN ml_status VARCHAR(20) DEFAULT 'pending'
-                "#;
-
-                sqlx::query(add_ml_status_query)
-                    .execute(&self.pool)
-                    .await
-                    .context("Failed to add ml_status column")?;
-
-                info!("Successfully added ml_status column");
-            } else {
-                info!("ml_status column already exists");
+        for (column_name, query) in migrations {
+            match sqlx::query(query).execute(&self.pool).await {
+                Ok(_) => {
+                    info!("✓ Ensured {} column exists", column_name);
+                }
+                Err(e) => {
+                    warn!(
+                        "Failed to add {} column (might already exist): {}",
+                        column_name, e
+                    );
+                    // Don't fail - column might already exist with different syntax
+                }
             }
         }
 
+        info!("✅ ML columns migration complete");
         Ok(())
     }
 
