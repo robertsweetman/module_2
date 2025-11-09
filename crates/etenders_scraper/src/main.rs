@@ -10,7 +10,7 @@ use scraper::{Html, Selector};
 use serde::{Deserialize, Serialize};
 use std::env;
 use std::str::FromStr;
-use tracing::{info, error, warn};
+use tracing::{error, info, warn};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 struct TenderRecord {
@@ -79,7 +79,11 @@ async fn function_handler(event: LambdaEvent<Request>) -> Result<Response, Error
     let client = Client::new();
     let base_url = "https://www.etenders.gov.ie/epps/quickSearchAction.do";
 
-    info!("Scraping pages {}-{}", start_page, start_page + max_pages - 1);
+    info!(
+        "Scraping pages {}-{}",
+        start_page,
+        start_page + max_pages - 1
+    );
     let records = scrape_tenders(&client, base_url, start_page, start_page + max_pages)
         .await
         .map_err(|e| Error::from(format!("Failed to scrape tenders: {}", e).as_str()))?;
@@ -200,8 +204,8 @@ async fn scrape_tenders(
 }
 
 fn parse_tender_row(row: &scraper::ElementRef) -> Result<TenderRecord> {
-    let id_sel = Selector::parse("td:nth-child(2)").unwrap();
-    let title_sel = Selector::parse("td:nth-child(3)").unwrap();
+    let title_sel = Selector::parse("td:nth-child(2)").unwrap(); // Title column with anchor
+    let id_sel = Selector::parse("td:nth-child(3)").unwrap(); // Resource ID column
     let ca_sel = Selector::parse("td:nth-child(4)").unwrap();
     let pub_sel = Selector::parse("td:nth-child(5)").unwrap();
     let deadline_sel = Selector::parse("td:nth-child(6)").unwrap();
@@ -211,10 +215,22 @@ fn parse_tender_row(row: &scraper::ElementRef) -> Result<TenderRecord> {
     let award_sel = Selector::parse("td:nth-child(11)").unwrap();
     let value_sel = Selector::parse("td:nth-child(12)").unwrap();
 
-    let resource_id = row
+    let col2_content = row
+        .select(&title_sel)
+        .next()
+        .map(|n| n.inner_html().trim().to_string())
+        .unwrap_or_default();
+
+    let col3_content = row
         .select(&id_sel)
         .next()
         .map(|n| n.inner_html().trim().to_string())
+        .unwrap_or_default();
+
+    let col2_text = row
+        .select(&title_sel)
+        .next()
+        .map(|n| n.text().collect::<Vec<_>>().join("").trim().to_string())
         .unwrap_or_default();
 
     let pdf_column = row
@@ -223,7 +239,22 @@ fn parse_tender_row(row: &scraper::ElementRef) -> Result<TenderRecord> {
         .map(|n| n.inner_html().trim().to_string())
         .unwrap_or_default();
 
-    let pdf_url = if !pdf_column.is_empty() {
+    // Debug logging
+    info!("Column 2 (Title) innerHTML: {}", col2_content);
+    info!("Column 2 (Title) text: {}", col2_text);
+    info!("Column 3 (Resource ID) innerHTML: {}", col3_content);
+    info!("Column 9 (PDF) innerHTML: {}", pdf_column);
+
+    // Extract resource_id from column 3 (plain text number)
+    let resource_id = col3_content.clone();
+
+    // Extract title from column 2's anchor tag text
+    let title = col2_text.clone();
+
+    info!("Extracted resource_id: {}", resource_id);
+    info!("Extracted title: {}", title);
+
+    let pdf_url = if !resource_id.is_empty() {
         format!(
             "https://www.etenders.gov.ie/epps/cft/downloadNoticeForAdvSearch.do?resourceId={}",
             resource_id
@@ -233,12 +264,8 @@ fn parse_tender_row(row: &scraper::ElementRef) -> Result<TenderRecord> {
     };
 
     let raw_record = TenderRecordRaw {
-        title: row
-            .select(&title_sel)
-            .next()
-            .map(|n| n.text().collect::<Vec<_>>().join("").trim().to_string())
-            .unwrap_or_default(),
-        resource_id: resource_id.clone(),
+        title,
+        resource_id,
         ca: row
             .select(&ca_sel)
             .next()
