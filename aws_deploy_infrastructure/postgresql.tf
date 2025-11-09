@@ -10,7 +10,7 @@ resource "aws_db_instance" "postgres" {
   username            = var.db_admin_name
   password            = var.db_admin_pwd
   skip_final_snapshot = true  # Set to false for production
-  publicly_accessible = false # Set to false for production
+  publicly_accessible = false # Keep private - only accessible from VPC
 
   vpc_security_group_ids = [aws_security_group.postgres_sg.id]
   db_subnet_group_name   = aws_db_subnet_group.postgres.name

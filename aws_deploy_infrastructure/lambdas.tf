@@ -206,17 +206,45 @@ resource "aws_lambda_function" "sns_notification" {
   memory_size = 256 # Minimal memory for email sending
 }
 
-# EventBridge rule to trigger postgres_dataload Lambda daily at 11:00 UTC (12:00 UK time)
+resource "aws_lambda_function" "etenders_scraper" {
+  function_name = "etenders_scraper"
+  handler       = "bootstrap"
+  runtime       = "provided.al2"
+  role          = aws_iam_role.lambda_role.arn
+
+  s3_bucket = aws_s3_bucket.lambda_bucket.id
+  s3_key    = "etenders_scraper.zip"
+
+  depends_on = [aws_s3_bucket.lambda_bucket]
+  lifecycle {
+    ignore_changes = [source_code_hash]
+  }
+
+  # No VPC Configuration - needs internet access to scrape etenders.gov.ie
+  # This Lambda only scrapes and sends to SQS, doesn't need database access
+
+  environment {
+    variables = {
+      RUST_BACKTRACE              = "1"
+      TENDER_PROCESSING_QUEUE_URL = aws_sqs_queue.tender_processing_queue.url
+    }
+  }
+
+  timeout     = 300 # 5 minutes for scraping
+  memory_size = 512
+}
+
+# EventBridge rule to trigger etenders_scraper Lambda daily at 11:00 UTC (12:00 UK time)
 resource "aws_cloudwatch_event_rule" "daily_tender_scan" {
   name                = "daily-tender-scan"
-  description         = "Trigger tender scanning every day at 12:30 UK time"
-  schedule_expression = "cron(30 12 * * ? *)"
+  description         = "Trigger tender scanning every day at 11:00 UTC (12:00 UK time)"
+  schedule_expression = "cron(15 13 * * ? *)"
 }
 
 resource "aws_cloudwatch_event_target" "daily_tender_scan_target" {
   rule      = aws_cloudwatch_event_rule.daily_tender_scan.name
-  target_id = "postgres-dataload-lambda"
-  arn       = aws_lambda_function.postgres_dataload.arn
+  target_id = "etenders-scraper-lambda"
+  arn       = aws_lambda_function.etenders_scraper.arn
 
   input = jsonencode({
     max_pages  = 10
@@ -226,10 +254,10 @@ resource "aws_cloudwatch_event_target" "daily_tender_scan_target" {
 }
 
 # Permission for EventBridge to invoke Lambda
-resource "aws_lambda_permission" "allow_eventbridge_postgres_dataload" {
+resource "aws_lambda_permission" "allow_eventbridge_etenders_scraper" {
   statement_id  = "AllowExecutionFromEventBridge"
   action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.postgres_dataload.function_name
+  function_name = aws_lambda_function.etenders_scraper.function_name
   principal     = "events.amazonaws.com"
   source_arn    = aws_cloudwatch_event_rule.daily_tender_scan.arn
 }

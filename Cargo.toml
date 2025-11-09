@@ -5,6 +5,7 @@ members = [
     "crates/get_data",
     "crates/ml_bid_predictor",
     "crates/ai_summary",
-    "crates/sns_notification"
+    "crates/sns_notification",
+    "crates/etenders_scraper"
 ]
 resolver = "2"

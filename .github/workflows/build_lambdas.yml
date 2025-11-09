@@ -14,6 +14,7 @@ on:
         type: choice
         options:
           - all
+          - etenders_scraper
           - postgres_dataload
           - pdf_processing
           - get_data
@@ -22,18 +23,18 @@ on:
           - sns_notification
 
 env:
-  LAMBDA_BUCKET: ${{ secrets.LAMBDA_BUCKET_NAME }}  # Set this as a GitHub secret
-  ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}  # Set this as a GitHub secret
-  NOTIFICATION_EMAILS: ${{ secrets.NOTIFICATION_EMAILS }}  # Set this as a GitHub secret
+  LAMBDA_BUCKET: ${{ secrets.LAMBDA_BUCKET_NAME }} # Set this as a GitHub secret
+  ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }} # Set this as a GitHub secret
+  NOTIFICATION_EMAILS: ${{ secrets.NOTIFICATION_EMAILS }} # Set this as a GitHub secret
 
 jobs:
   build-and-deploy:
     name: Build and Deploy (${{ inputs.lambda || 'all' }})
     runs-on: ubuntu-latest
-    
+
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -63,6 +64,11 @@ jobs:
         run: |
           pwd
           ls -R
+
+      - name: Build ETenders Scraper Lambda
+        if: ${{ inputs.lambda == 'all' || inputs.lambda == 'etenders_scraper' }}
+        run: |
+          cargo lambda build --release --target x86_64-unknown-linux-musl --package etenders_scraper
 
       - name: Build Postgres Dataload Lambda
         if: ${{ inputs.lambda == 'all' || inputs.lambda == 'postgres_dataload' }}
@@ -199,6 +205,11 @@ jobs:
             aws lambda update-function-code --function-name sns_notification --s3-bucket $LAMBDA_BUCKET --s3-key sns_notification.zip
           fi
 
+      - name: Wait for ETenders Scraper Update
+        if: ${{ inputs.lambda == 'all' || inputs.lambda == 'etenders_scraper' }}
+        run: |
+          aws lambda wait function-updated --function-name etenders_scraper
+
       - name: Wait for Postgres Dataload Update
         if: ${{ inputs.lambda == 'all' || inputs.lambda == 'postgres_dataload' }}
         run: |
@@ -208,22 +219,22 @@ jobs:
         if: ${{ inputs.lambda == 'all' || inputs.lambda == 'pdf_processing' }}
         run: |
           aws lambda wait function-updated --function-name pdf_processing
-      
+
       - name: Wait for Get Data Update
         if: ${{ inputs.lambda == 'all' || inputs.lambda == 'get_data' }}
         run: |
           aws lambda wait function-updated --function-name get_data
-      
+
       - name: Wait for ML Bid Predictor Update
         if: ${{ inputs.lambda == 'all' || inputs.lambda == 'ml_bid_predictor' }}
         run: |
           aws lambda wait function-updated --function-name ml_bid_predictor
-      
+
       - name: Wait for AI Summary Update
         if: ${{ inputs.lambda == 'all' || inputs.lambda == 'ai_summary' }}
         run: |
           aws lambda wait function-updated --function-name ai_summary
-      
+
       - name: Wait for SNS Notification Update
         if: ${{ inputs.lambda == 'all' || inputs.lambda == 'sns_notification' }}
         run: |
