@@ -194,13 +194,13 @@ resource "aws_instance" "bastion" {
 #!/bin/bash
 echo "Connecting to PostgreSQL database..."
 echo "Use the following connection details:"
-echo "Host: ${aws_db_instance.postgres.endpoint}"
+echo "Host: ${data.aws_db_instance.postgres.endpoint}"
 echo "Port: 5432"
 echo "Database: ${var.db_name}"
 echo "Username: ${var.db_admin_name}"
 echo ""
 echo "Example connection command:"
-echo "psql -h ${aws_db_instance.postgres.endpoint} -p 5432 -U ${var.db_admin_name} -d ${var.db_name}"
+echo "psql -h ${data.aws_db_instance.postgres.endpoint} -p 5432 -U ${var.db_admin_name} -d ${var.db_name}"
 SCRIPT
 
     chmod +x /home/ec2-user/connect-db.sh

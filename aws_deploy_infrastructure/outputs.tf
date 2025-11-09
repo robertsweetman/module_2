@@ -1,12 +1,12 @@
 # Output the database endpoint
 output "db_endpoint" {
   description = "postgres database endpoint"
-  value       = aws_db_instance.postgres.endpoint
+  value       = data.aws_db_instance.postgres.endpoint
 }
 
 output "db_name" {
   description = "postgres database name"
-  value       = aws_db_instance.postgres.db_name
+  value       = data.aws_db_instance.postgres.db_name
 }
 
 output "lambda_bucket_name" {
@@ -60,14 +60,14 @@ To access the PostgreSQL database securely:
    ./connect-db.sh
 
 3. Or connect directly with psql:
-   psql -h ${aws_db_instance.postgres.endpoint} -p 5432 -U ${var.db_admin_name} -d ${var.db_name}
+   echo "psql -h ${data.aws_db_instance.postgres.endpoint} -p 5432 -U ${var.db_admin_name} -d ${var.db_name}"
 
    Password: ${var.db_admin_pwd}
 
 4. Alternatively, use port forwarding to connect from your local machine:
    aws ssm start-session --target ${aws_instance.bastion.id} \
      --document-name AWS-StartPortForwardingSessionToRemoteHost \
-     --parameters host="${aws_db_instance.postgres.endpoint}",portNumber="5432",localPortNumber="5432"
+     --parameters host="${data.aws_db_instance.postgres.endpoint}",portNumber="5432",localPortNumber="5432"
 
    Then connect locally: psql -h localhost -p 5432 -U ${var.db_admin_name} -d ${var.db_name}
 EOF
