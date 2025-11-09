@@ -1,3 +1,8 @@
+# Temporary data source to create placeholder during RDS deletion
+data "aws_db_instance" "postgres" {
+  db_instance_identifier = "postgres-db"
+}
+
 # Create the PostgreSQL RDS instance
 # COMMENTED OUT FOR DELETION - Will recreate with publicly_accessible = true
 # resource "aws_db_instance" "postgres" {
