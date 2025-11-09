@@ -1,12 +1,12 @@
 # Output the database endpoint
 output "db_endpoint" {
   description = "postgres database endpoint"
-  value       = data.aws_db_instance.postgres.endpoint
+  value       = aws_db_instance.postgres.endpoint
 }
 
 output "db_name" {
   description = "postgres database name"
-  value       = data.aws_db_instance.postgres.db_name
+  value       = aws_db_instance.postgres.db_name
 }
 
 output "lambda_bucket_name" {

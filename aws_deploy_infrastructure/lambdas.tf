@@ -26,7 +26,7 @@ resource "aws_lambda_function" "pdf_processing" {
   environment {
     variables = {
       RUST_BACKTRACE           = "full"
-      DATABASE_URL             = "postgres://${var.db_admin_name}:${var.db_admin_pwd}@${data.aws_db_instance.postgres.endpoint}/${var.db_name}"
+      DATABASE_URL             = "postgres://${var.db_admin_name}:${var.db_admin_pwd}@${aws_db_instance.postgres.endpoint}/${var.db_name}"
       LAMBDA_BUCKET            = aws_s3_bucket.lambda_bucket.id
       PDF_PROCESSING_QUEUE_URL = aws_sqs_queue.pdf_processing_queue.url
       ML_PREDICTION_QUEUE_URL  = aws_sqs_queue.ml_prediction_queue.url
@@ -57,7 +57,7 @@ resource "aws_lambda_function" "postgres_dataload" {
   environment {
     variables = {
       RUST_BACKTRACE           = "1"
-      DATABASE_URL             = "postgres://${var.db_admin_name}:${var.db_admin_pwd}@${data.aws_db_instance.postgres.endpoint}/${var.db_name}"
+      DATABASE_URL             = "postgres://${var.db_admin_name}:${var.db_admin_pwd}@${aws_db_instance.postgres.endpoint}/${var.db_name}"
       PDF_PROCESSING_QUEUE_URL = aws_sqs_queue.pdf_processing_queue.url
       ML_PREDICTION_QUEUE_URL  = aws_sqs_queue.ml_prediction_queue.url
       AI_SUMMARY_QUEUE_URL     = aws_sqs_queue.ai_summary_queue.url
@@ -91,7 +91,7 @@ resource "aws_lambda_function" "get_data" {
   environment {
     variables = {
       RUST_BACKTRACE     = "1"
-      DATABASE_URL       = "postgres://${var.db_admin_name}:${var.db_admin_pwd}@${data.aws_db_instance.postgres.endpoint}/${var.db_name}"
+      DATABASE_URL       = "postgres://${var.db_admin_name}:${var.db_admin_pwd}@${aws_db_instance.postgres.endpoint}/${var.db_name}"
       LAMBDA_BUCKET_NAME = aws_s3_bucket.lambda_bucket.id
     }
   }
@@ -120,7 +120,7 @@ resource "aws_lambda_function" "ml_bid_predictor" {
   environment {
     variables = {
       RUST_BACKTRACE       = "1"
-      DATABASE_URL         = "postgres://${var.db_admin_name}:${var.db_admin_pwd}@${data.aws_db_instance.postgres.endpoint}/${var.db_name}"
+      DATABASE_URL         = "postgres://${var.db_admin_name}:${var.db_admin_pwd}@${aws_db_instance.postgres.endpoint}/${var.db_name}"
       AI_SUMMARY_QUEUE_URL = aws_sqs_queue.ai_summary_queue.url
       SNS_TOPIC_ARN        = aws_sns_topic.ml_predictions.arn
       MODEL_VERSION        = "v1.0"
@@ -155,7 +155,7 @@ resource "aws_lambda_function" "ai_summary" {
   environment {
     variables = {
       RUST_BACKTRACE    = "1"
-      DATABASE_URL      = "postgres://${var.db_admin_name}:${var.db_admin_pwd}@${data.aws_db_instance.postgres.endpoint}/${var.db_name}"
+      DATABASE_URL      = "postgres://${var.db_admin_name}:${var.db_admin_pwd}@${aws_db_instance.postgres.endpoint}/${var.db_name}"
       SNS_QUEUE_URL     = aws_sqs_queue.sns_queue.url
       ANTHROPIC_API_KEY = var.anthropic_api_key
     }
