@@ -14,7 +14,7 @@ resource "aws_ses_configuration_set" "etenders_notifications" {
 
 # Output the verification status
 output "ses_email_verification_status" {
-  value = aws_ses_email_identity.sender_email.arn
+  value       = aws_ses_email_identity.sender_email.arn
   description = "ARN of the verified SES email identity"
 }
 

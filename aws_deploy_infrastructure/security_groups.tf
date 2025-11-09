@@ -1,34 +1,29 @@
+# Use default VPC
+data "aws_vpc" "default" {
+  default = true
+}
+
+# Get Internet Gateway for the default VPC
+data "aws_internet_gateway" "default" {
+  filter {
+    name   = "attachment.vpc-id"
+    values = [data.aws_vpc.default.id]
+  }
+}
+
 # Security group for Lambda functions
 resource "aws_security_group" "lambda_sg" {
   name        = "lambda-sg"
   description = "Security group for Lambda functions"
   vpc_id      = data.aws_vpc.default.id
 
-  # Allow HTTPS outbound for VPC endpoints and external API calls
+  # Allow all outbound traffic - required for VPC endpoints and RDS
   egress {
-    description = "HTTPS outbound"
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
+    description = "All outbound traffic"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  # Allow HTTP outbound for any HTTP API calls
-  egress {
-    description = "HTTP outbound"
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  # Allow PostgreSQL outbound to RDS
-  egress {
-    description = "PostgreSQL outbound"
-    from_port   = 5432
-    to_port     = 5432
-    protocol    = "tcp"
-    cidr_blocks = [data.aws_vpc.default.cidr_block]
   }
 
   tags = {
@@ -42,22 +37,13 @@ resource "aws_security_group" "bastion_sg" {
   description = "Security group for bastion host with SSM access"
   vpc_id      = data.aws_vpc.default.id
 
-  # Allow HTTPS outbound for SSM
+  # Allow all outbound traffic for SSM and PostgreSQL
   egress {
-    description = "HTTPS outbound for SSM"
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
+    description = "All outbound traffic"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  # Allow PostgreSQL outbound to RDS
-  egress {
-    description = "PostgreSQL outbound"
-    from_port   = 5432
-    to_port     = 5432
-    protocol    = "tcp"
-    cidr_blocks = [data.aws_vpc.default.cidr_block]
   }
 
   tags = {
@@ -68,16 +54,17 @@ resource "aws_security_group" "bastion_sg" {
 # Create a security group for the RDS instance
 resource "aws_security_group" "postgres_sg" {
   name        = "postgres-sg"
-  description = "Allow PostgreSQL inbound traffic from Lambda and Bastion only"
+  description = "Allow PostgreSQL inbound traffic from Lambda and Bastion"
   vpc_id      = data.aws_vpc.default.id
 
-  # Allow PostgreSQL from Lambda
+  # Allow PostgreSQL from Lambda (which is outside VPC)
+  # Since Lambda is not in VPC, we need to allow from AWS Lambda IP ranges
   ingress {
-    description     = "PostgreSQL from Lambda"
-    from_port       = 5432
-    to_port         = 5432
-    protocol        = "tcp"
-    security_groups = [aws_security_group.lambda_sg.id]
+    description = "PostgreSQL from Lambda service"
+    from_port   = 5432
+    to_port     = 5432
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"] # Lambda has dynamic IPs - restrict to your region's Lambda IP ranges for production
   }
 
   # Allow PostgreSQL from Bastion
@@ -89,21 +76,17 @@ resource "aws_security_group" "postgres_sg" {
     security_groups = [aws_security_group.bastion_sg.id]
   }
 
+  # Allow all outbound
+  egress {
+    description = "All outbound traffic"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
   tags = {
     Name = "postgres-sg"
-  }
-}
-
-# Use default VPC
-data "aws_vpc" "default" {
-  default = true
-}
-
-# Get Internet Gateway for the default VPC
-data "aws_internet_gateway" "default" {
-  filter {
-    name   = "attachment.vpc-id"
-    values = [data.aws_vpc.default.id]
   }
 }
 

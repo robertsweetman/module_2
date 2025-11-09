@@ -20,11 +20,8 @@ resource "aws_lambda_function" "pdf_processing" {
     ignore_changes = [source_code_hash]
   }
 
-  # VPC Configuration
-  vpc_config {
-    subnet_ids         = tolist(data.aws_subnets.default.ids)
-    security_group_ids = [aws_security_group.lambda_sg.id]
-  }
+  # No VPC Configuration - Lambda runs outside VPC for internet access to SQS and S3
+  # This allows it to access AWS services while still reaching RDS (which is publicly accessible)
 
   environment {
     variables = {
@@ -54,11 +51,8 @@ resource "aws_lambda_function" "postgres_dataload" {
     ignore_changes = [source_code_hash]
   }
 
-  # VPC Configuration
-  vpc_config {
-    subnet_ids         = tolist(data.aws_subnets.default.ids)
-    security_group_ids = [aws_security_group.lambda_sg.id]
-  }
+  # No VPC Configuration - Lambda runs outside VPC for internet access to SQS
+  # This allows it to access SQS while still reaching RDS (which must be publicly accessible)
 
   environment {
     variables = {
@@ -91,11 +85,8 @@ resource "aws_lambda_function" "get_data" {
     ignore_changes = [source_code_hash]
   }
 
-  # VPC Configuration
-  vpc_config {
-    subnet_ids         = tolist(data.aws_subnets.default.ids)
-    security_group_ids = [aws_security_group.lambda_sg.id]
-  }
+  # No VPC Configuration - Lambda runs outside VPC for internet access to S3
+  # This allows it to access AWS services while still reaching RDS (which is publicly accessible)
 
   environment {
     variables = {
@@ -123,11 +114,8 @@ resource "aws_lambda_function" "ml_bid_predictor" {
     ignore_changes = [source_code_hash]
   }
 
-  # VPC Configuration
-  vpc_config {
-    subnet_ids         = tolist(data.aws_subnets.default.ids)
-    security_group_ids = [aws_security_group.lambda_sg.id]
-  }
+  # No VPC Configuration - Lambda runs outside VPC for internet access to SQS
+  # This allows it to access AWS services while still reaching RDS (which is publicly accessible)
 
   environment {
     variables = {
@@ -161,11 +149,8 @@ resource "aws_lambda_function" "ai_summary" {
     ignore_changes = [source_code_hash]
   }
 
-  # VPC Configuration
-  vpc_config {
-    subnet_ids         = tolist(data.aws_subnets.default.ids)
-    security_group_ids = [aws_security_group.lambda_sg.id]
-  }
+  # No VPC Configuration - Lambda runs outside VPC for internet access to SQS and external APIs
+  # This allows it to access AWS services and Anthropic API while still reaching RDS (which is publicly accessible)
 
   environment {
     variables = {

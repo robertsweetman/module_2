@@ -32,14 +32,16 @@ resource "aws_security_group" "vpc_endpoint_sg" {
   description = "Security group for VPC endpoints"
   vpc_id      = data.aws_vpc.default.id
 
+  # Allow all inbound from VPC - VPC endpoints need to accept connections from Lambda
   ingress {
-    description     = "HTTPS from Lambda"
-    from_port       = 443
-    to_port         = 443
-    protocol        = "tcp"
-    security_groups = [aws_security_group.lambda_sg.id]
+    description = "All traffic from VPC"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = [data.aws_vpc.default.cidr_block]
   }
 
+  # Allow all outbound traffic
   egress {
     description = "Allow all outbound"
     from_port   = 0

@@ -1,5 +1,5 @@
 resource "aws_s3_bucket" "lambda_bucket" {
-  bucket = "module2-lambda-deployments"
+  bucket        = "module2-lambda-deployments"
   force_destroy = true
 }
 
@@ -36,13 +36,13 @@ resource "aws_s3_bucket_policy" "lambda_bucket_policy" {
         Effect    = "Deny"
         Principal = "*"
         Action    = "s3:*"
-        Resource  = [
+        Resource = [
           "${aws_s3_bucket.lambda_bucket.arn}",
           "${aws_s3_bucket.lambda_bucket.arn}/*"
         ]
         Condition = {
           StringNotEquals = {
-            "aws:PrincipalAccount": "${data.aws_caller_identity.current.account_id}"
+            "aws:PrincipalAccount" : "${data.aws_caller_identity.current.account_id}"
           }
         }
       }

@@ -6,7 +6,7 @@ terraform {
     }
   }
 
-# backend state is held in S3
+  # backend state is held in S3
   backend "s3" {
     bucket = "tfstate-a3zfrygj" # IMPORTANT: update AFTER aws_backend_bootstrap has been run
     key    = "terraform.tfstate"
