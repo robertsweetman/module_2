@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       lambda:
-        description: "Lambda to build/deploy (all | postgres_dataload | pdf_processing | get_data | ml_bid_predictor | ai_summary | sns_notification)"
+        description: "Lambda to build/deploy (all | etenders_scraper | postgres_dataload | pdf_processing | get_data | ml_bid_predictor | ai_summary | sns_notification)"
         required: true
         default: "all"
         type: choice
