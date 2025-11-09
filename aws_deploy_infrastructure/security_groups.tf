@@ -68,16 +68,16 @@ resource "aws_security_group" "bastion_sg" {
 # Create a security group for the RDS instance
 resource "aws_security_group" "postgres_sg" {
   name        = "postgres-sg"
-  description = "Allow PostgreSQL inbound traffic from Lambda and Bastion only"
+  description = "Allow PostgreSQL inbound traffic from Lambda and Bastion"
   vpc_id      = data.aws_vpc.default.id
 
-  # Allow PostgreSQL from Lambda
+  # Allow PostgreSQL from Lambda (which is outside VPC, so needs CIDR blocks)
   ingress {
-    description     = "PostgreSQL from Lambda"
-    from_port       = 5432
-    to_port         = 5432
-    protocol        = "tcp"
-    security_groups = [aws_security_group.lambda_sg.id]
+    description = "PostgreSQL from Lambda service"
+    from_port   = 5432
+    to_port     = 5432
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]  # Lambda has dynamic IPs - restrict to your region's Lambda IP ranges for production
   }
 
   # Allow PostgreSQL from Bastion
@@ -87,6 +87,15 @@ resource "aws_security_group" "postgres_sg" {
     to_port         = 5432
     protocol        = "tcp"
     security_groups = [aws_security_group.bastion_sg.id]
+  }
+
+  # Allow all outbound
+  egress {
+    description = "All outbound traffic"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   tags = {
