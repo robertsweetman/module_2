@@ -206,17 +206,17 @@ resource "aws_lambda_function" "sns_notification" {
   memory_size = 256 # Minimal memory for email sending
 }
 
-# EventBridge rule to trigger get_data Lambda daily at 09:00 UTC
+# EventBridge rule to trigger postgres_dataload Lambda daily at 11:00 UTC (12:00 UK time)
 resource "aws_cloudwatch_event_rule" "daily_tender_scan" {
   name                = "daily-tender-scan"
-  description         = "Trigger tender scanning every day at 09:00 UTC"
-  schedule_expression = "cron(0 9 * * ? *)"
+  description         = "Trigger tender scanning every day at 11:00 UTC (12:00 UK time)"
+  schedule_expression = "cron(0 11 * * ? *)"
 }
 
 resource "aws_cloudwatch_event_target" "daily_tender_scan_target" {
   rule      = aws_cloudwatch_event_rule.daily_tender_scan.name
-  target_id = "get-data-lambda"
-  arn       = aws_lambda_function.get_data.arn
+  target_id = "postgres-dataload-lambda"
+  arn       = aws_lambda_function.postgres_dataload.arn
 
   input = jsonencode({
     max_pages  = 10
@@ -226,10 +226,10 @@ resource "aws_cloudwatch_event_target" "daily_tender_scan_target" {
 }
 
 # Permission for EventBridge to invoke Lambda
-resource "aws_lambda_permission" "allow_eventbridge_get_data" {
+resource "aws_lambda_permission" "allow_eventbridge_postgres_dataload" {
   statement_id  = "AllowExecutionFromEventBridge"
   action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.get_data.function_name
+  function_name = aws_lambda_function.postgres_dataload.function_name
   principal     = "events.amazonaws.com"
   source_arn    = aws_cloudwatch_event_rule.daily_tender_scan.arn
 }

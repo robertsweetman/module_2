@@ -1,17 +1,20 @@
-use lambda_runtime::{service_fn, LambdaEvent, Error};
-use serde::{Deserialize, Serialize};
-use scraper::{Html, Selector};
-use sqlx::{Pool, postgres::{PgPoolOptions, Postgres}};
-use std::env;
-use reqwest::Client;
-use tokio;
-use serde_json;
 use aws_config;
 use aws_sdk_sqs::Client as SqsClient;
-use chrono::{NaiveDate, NaiveDateTime};
 use bigdecimal::BigDecimal;
+use chrono::{NaiveDate, NaiveDateTime};
+use lambda_runtime::{Error, LambdaEvent, service_fn};
 use regex::Regex;
+use reqwest::Client;
+use scraper::{Html, Selector};
+use serde::{Deserialize, Serialize};
+use serde_json;
+use sqlx::{
+    Pool,
+    postgres::{PgPoolOptions, Postgres},
+};
+use std::env;
 use std::str::FromStr;
+use tokio;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 struct TenderRecord {
@@ -70,21 +73,21 @@ struct Response {
 
 async fn function_handler(event: LambdaEvent<Request>) -> Result<Response, Error> {
     println!("Starting function handler...");
-    
+
     // Get database connection
     let test_mode = event.payload.test_mode.unwrap_or(false);
     println!("Test mode: {}", test_mode);
-    
+
     let pool = if !test_mode {
         println!("Attempting to connect to database...");
         let db_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
         println!("Database URL found, connecting...");
-        
+
         let pool = PgPoolOptions::new()
             .max_connections(5)
             .connect(&db_url)
             .await?;
-        
+
         println!("Connected to database, ensuring table exists...");
         // Ensure table exists
         ensure_table_exists(&pool).await?;
@@ -94,12 +97,12 @@ async fn function_handler(event: LambdaEvent<Request>) -> Result<Response, Error
         println!("Test mode: skipping database connection");
         None
     };
-    
+
     // Setup HTTP client
     println!("Setting up HTTP client...");
     let client = Client::new();
     let base_url = "https://www.etenders.gov.ie/epps/quickSearchAction.do";
-    
+
     // Get parameters from request
     let start_page = event.payload.start_page.unwrap_or(1);
     let offset = event.payload.offset.unwrap_or(0);
@@ -115,39 +118,68 @@ async fn function_handler(event: LambdaEvent<Request>) -> Result<Response, Error
     } else {
         (start_page, start_page + max_pages)
     };
-    
+
     println!("Fetching {} pages of data...", max_pages);
     // Get records
-    let records = get_table_content(&client, base_url, actual_start, actual_end, test_mode).await?;
+    let mut records =
+        get_table_content(&client, base_url, actual_start, actual_end, test_mode).await?;
     println!("Successfully fetched {} records", records.len());
-    
+
+    // Filter out records that already exist in DB (dedupe check)
+    if !test_mode {
+        if let Some(pool_ref) = &pool {
+            println!("Checking for existing records in database...");
+            let new_records = filter_new_records(pool_ref, &records).await?;
+            let filtered_count = records.len() - new_records.len();
+            if filtered_count > 0 {
+                println!(
+                    "Filtered out {} existing records, processing {} new records",
+                    filtered_count,
+                    new_records.len()
+                );
+            }
+            records = new_records;
+        }
+    }
+
     // After processing the records but before returning the Response
     // Split records into PDF and non-PDF for different processing paths
-    let (pdf_records, non_pdf_records): (Vec<&TenderRecord>, Vec<&TenderRecord>) = records.iter()
-        .partition(|r| !r.pdf_url.is_empty());
+    let (pdf_records, non_pdf_records): (Vec<&TenderRecord>, Vec<&TenderRecord>) =
+        records.iter().partition(|r| !r.pdf_url.is_empty());
 
     // Only save if not in test mode
     if !test_mode {
         if let Some(pool_ref) = &pool {
-            println!("Saving records to database...");
-            save_records(pool_ref, &records).await?;
-            println!("Records saved successfully");
+            if !records.is_empty() {
+                println!("Saving {} new records to database...", records.len());
+                save_records(pool_ref, &records).await?;
+                println!("Records saved successfully");
+            } else {
+                println!("No new records to save");
+            }
         }
     }
-    
+
     if !test_mode {
         // Initialize AWS SDK and SQS client
-        let config = aws_config::defaults(aws_config::BehaviorVersion::latest()).load().await;
+        let config = aws_config::defaults(aws_config::BehaviorVersion::latest())
+            .load()
+            .await;
         let sqs_client = SqsClient::new(&config);
 
         // Process records with PDFs - send to PDF processing queue
         if !pdf_records.is_empty() {
-            println!("Found {} records with PDFs, queuing for PDF processing", pdf_records.len());
-            
+            println!(
+                "Found {} records with PDFs, queuing for PDF processing",
+                pdf_records.len()
+            );
+
             let pdf_queue_url = match env::var("PDF_PROCESSING_QUEUE_URL") {
                 Ok(url) => url,
                 Err(_) => {
-                    println!("Error: PDF_PROCESSING_QUEUE_URL environment variable not set; skipping PDF processing.");
+                    println!(
+                        "Error: PDF_PROCESSING_QUEUE_URL environment variable not set; skipping PDF processing."
+                    );
                     String::new()
                 }
             };
@@ -165,15 +197,13 @@ async fn function_handler(event: LambdaEvent<Request>) -> Result<Response, Error
                         .await
                     {
                         Ok(resp) => println!(
-                            "Queued PDF record {} (message ID: {})", 
+                            "Queued PDF record {} (message ID: {})",
                             record.resource_id,
                             resp.message_id().unwrap_or_default()
                         ),
-                        Err(e) => println!(
-                            "Failed to queue PDF record {}: {}", 
-                            record.resource_id,
-                            e
-                        ),
+                        Err(e) => {
+                            println!("Failed to queue PDF record {}: {}", record.resource_id, e)
+                        }
                     }
                 }
             }
@@ -181,12 +211,17 @@ async fn function_handler(event: LambdaEvent<Request>) -> Result<Response, Error
 
         // Process records without PDFs - send directly to AI summary queue
         if !non_pdf_records.is_empty() {
-            println!("Found {} records without PDFs, queuing for AI summary", non_pdf_records.len());
-            
+            println!(
+                "Found {} records without PDFs, queuing for AI summary",
+                non_pdf_records.len()
+            );
+
             let ai_summary_queue_url = match env::var("AI_SUMMARY_QUEUE_URL") {
                 Ok(url) => url,
                 Err(_) => {
-                    println!("Error: AI_SUMMARY_QUEUE_URL environment variable not set; skipping AI summary.");
+                    println!(
+                        "Error: AI_SUMMARY_QUEUE_URL environment variable not set; skipping AI summary."
+                    );
                     String::new()
                 }
             };
@@ -195,7 +230,8 @@ async fn function_handler(event: LambdaEvent<Request>) -> Result<Response, Error
                 for record in non_pdf_records {
                     // Send full TenderRecord object as JSON, with processing_stage marker
                     let mut record_with_stage = serde_json::to_value(record)?;
-                    record_with_stage["processing_stage"] = serde_json::Value::String("ai_summary_direct".to_string());
+                    record_with_stage["processing_stage"] =
+                        serde_json::Value::String("ai_summary_direct".to_string());
                     let message_body = record_with_stage.to_string();
 
                     match sqs_client
@@ -206,21 +242,20 @@ async fn function_handler(event: LambdaEvent<Request>) -> Result<Response, Error
                         .await
                     {
                         Ok(resp) => println!(
-                            "Queued non-PDF record {} for AI summary (message ID: {})", 
+                            "Queued non-PDF record {} for AI summary (message ID: {})",
                             record.resource_id,
                             resp.message_id().unwrap_or_default()
                         ),
                         Err(e) => println!(
-                            "Failed to queue non-PDF record {}: {}", 
-                            record.resource_id,
-                            e
+                            "Failed to queue non-PDF record {}: {}",
+                            record.resource_id, e
                         ),
                     }
                 }
             }
         }
     }
-    
+
     println!("Function completed successfully");
     Ok(Response {
         records_count: records.len(),
@@ -252,21 +287,69 @@ async fn ensure_table_exists(pool: &Pool<Postgres>) -> Result<(), Error> {
             value DECIMAL(15,2),
             cycle TEXT NOT NULL,
             bid INTEGER DEFAULT NULL,
+            notification_sent BOOLEAN DEFAULT FALSE,
+            notification_sent_at TIMESTAMP WITH TIME ZONE DEFAULT NULL,
             created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
         )
+        "#,
+    )
+    .execute(pool)
+    .await?;
+
+    // Add notification columns if they don't exist (for existing tables)
+    sqlx::query(
+        r#"
+        DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_name='tender_records' AND column_name='notification_sent'
+            ) THEN
+                ALTER TABLE tender_records ADD COLUMN notification_sent BOOLEAN DEFAULT FALSE;
+            END IF;
+
+            IF NOT EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_name='tender_records' AND column_name='notification_sent_at'
+            ) THEN
+                ALTER TABLE tender_records ADD COLUMN notification_sent_at TIMESTAMP WITH TIME ZONE DEFAULT NULL;
+            END IF;
+        END $$;
         "#
     )
     .execute(pool)
     .await?;
-    
+
     Ok(())
+}
+
+async fn filter_new_records(
+    pool: &Pool<Postgres>,
+    records: &[TenderRecord],
+) -> Result<Vec<TenderRecord>, Error> {
+    let mut new_records = Vec::new();
+
+    for rec in records {
+        // Check if resource_id already exists in database
+        let exists: Option<(i64,)> =
+            sqlx::query_as("SELECT resource_id FROM tender_records WHERE resource_id = $1")
+                .bind(rec.resource_id)
+                .fetch_optional(pool)
+                .await?;
+
+        if exists.is_none() {
+            new_records.push(rec.clone());
+        }
+    }
+
+    Ok(new_records)
 }
 
 async fn save_records(pool: &Pool<Postgres>, records: &[TenderRecord]) -> Result<(), Error> {
     for record in records {
         sqlx::query(
             r#"
-            INSERT INTO tender_records 
+            INSERT INTO tender_records
             (title, resource_id, ca, info, published, deadline, procedure, status, pdf_url, awarddate, value, cycle, bid)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
             ON CONFLICT (resource_id) DO UPDATE SET
@@ -281,7 +364,7 @@ async fn save_records(pool: &Pool<Postgres>, records: &[TenderRecord]) -> Result
                 awarddate = EXCLUDED.awarddate,
                 value = EXCLUDED.value,
                 cycle = EXCLUDED.cycle
-                -- Note: We don't update bid column to preserve existing labels
+                -- Note: We don't update bid column or notification fields to preserve existing data
             "#
         )
         .bind(&record.title)
@@ -300,7 +383,7 @@ async fn save_records(pool: &Pool<Postgres>, records: &[TenderRecord]) -> Result
         .execute(pool)
         .await?;
     }
-    
+
     Ok(())
 }
 
@@ -315,7 +398,10 @@ async fn get_table_content(
 
     for page in start_page..end_page {
         println!("Fetching page {}/{}", page, end_page);
-        let url = format!("{}?d-3680175-p={}&searchType=cftFTS&latest=true", base_url, page);
+        let url = format!(
+            "{}?d-3680175-p={}&searchType=cftFTS&latest=true",
+            base_url, page
+        );
         let response = match client.get(&url).send().await {
             Ok(resp) => resp,
             Err(e) => {
@@ -356,7 +442,10 @@ async fn get_table_content(
                 .unwrap_or_default();
 
             let pdf_url = if !pdf_column_content.is_empty() {
-                format!("https://www.etenders.gov.ie/epps/cft/downloadNoticeForAdvSearch.do?resourceId={}", resource_id)
+                format!(
+                    "https://www.etenders.gov.ie/epps/cft/downloadNoticeForAdvSearch.do?resourceId={}",
+                    resource_id
+                )
             } else {
                 String::new()
             };
@@ -431,54 +520,54 @@ fn parse_irish_date(date_str: &str) -> Option<NaiveDate> {
     if date_str.is_empty() {
         return None;
     }
-    
+
     // First try to parse as datetime and extract date component
     if let Some(datetime) = parse_irish_datetime(date_str) {
         return Some(datetime.date());
     }
-    
+
     // Fallback formats for date-only strings
     let fallback_formats = [
-        "%d/%m/%Y",                 // 25/12/2024
-        "%d-%m-%Y",                 // 25-12-2024
-        "%Y-%m-%d",                 // 2024-12-25 (ISO format)
+        "%d/%m/%Y", // 25/12/2024
+        "%d-%m-%Y", // 25-12-2024
+        "%Y-%m-%d", // 2024-12-25 (ISO format)
     ];
-    
+
     for format in &fallback_formats {
         if let Ok(date) = NaiveDate::parse_from_str(date_str, format) {
             return Some(date);
         }
     }
-    
+
     println!("Warning: Could not parse date: '{}'", date_str);
     None
 }
 
 fn parse_irish_datetime(dt_str: &str) -> Option<NaiveDateTime> {
-    if dt_str.is_empty() { 
-        return None; 
+    if dt_str.is_empty() {
+        return None;
     }
-    
+
     // Main format from Irish tenders HTML: "18/07/2025 08:01:00"
     if let Ok(datetime) = NaiveDateTime::parse_from_str(dt_str, "%d/%m/%Y %H:%M:%S") {
         return Some(datetime);
     }
-    
+
     // Additional fallback formats
     let datetime_formats = [
-        "%d/%m/%Y %H:%M",           // Without seconds
-        "%d-%m-%Y %H:%M:%S",        // Dash separator
-        "%d-%m-%Y %H:%M",           // Dash separator without seconds
-        "%Y-%m-%d %H:%M:%S",        // ISO format
-        "%Y-%m-%d %H:%M",           // ISO format without seconds
+        "%d/%m/%Y %H:%M",    // Without seconds
+        "%d-%m-%Y %H:%M:%S", // Dash separator
+        "%d-%m-%Y %H:%M",    // Dash separator without seconds
+        "%Y-%m-%d %H:%M:%S", // ISO format
+        "%Y-%m-%d %H:%M",    // ISO format without seconds
     ];
-    
+
     for format in &datetime_formats {
         if let Ok(datetime) = NaiveDateTime::parse_from_str(dt_str, format) {
             return Some(datetime);
         }
     }
-    
+
     println!("Warning: Could not parse datetime: '{}'", dt_str);
     None
 }
@@ -487,22 +576,23 @@ fn parse_tender_value(value_str: &str) -> Option<BigDecimal> {
     if value_str.is_empty() {
         return None;
     }
-    
+
     // Create regex for parsing monetary values
     let value_regex = Regex::new(r"[€£$]?[\d,]+\.?\d*").unwrap();
-    
+
     if let Some(captures) = value_regex.find(value_str) {
-        let clean_value = captures.as_str()
+        let clean_value = captures
+            .as_str()
             .replace("€", "")
             .replace("£", "")
             .replace("$", "")
             .replace(",", "");
-            
+
         if let Ok(decimal_value) = BigDecimal::from_str(&clean_value) {
             return Some(decimal_value);
         }
     }
-    
+
     println!("Warning: Could not parse value: '{}'", value_str);
     None
 }
