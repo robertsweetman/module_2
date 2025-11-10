@@ -150,14 +150,20 @@ async fn ensure_tables_exist(pool: &Pool<Postgres>) -> Result<(), Error> {
             bid INTEGER DEFAULT NULL,
             notification_sent BOOLEAN DEFAULT FALSE,
             notification_sent_at TIMESTAMP WITH TIME ZONE DEFAULT NULL,
-            created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+            ml_processed BOOLEAN DEFAULT FALSE,
+            ml_bid BOOLEAN,
+            ml_confidence DECIMAL(5,4),
+            ml_reasoning TEXT,
+            ml_status VARCHAR(20) DEFAULT 'pending'
         )
         "#,
     )
     .execute(pool)
     .await?;
 
-    // Add notification columns if they don't exist (for existing tables)
+    // Add missing columns if they don't exist (for existing tables that were created before these columns were added)
     sqlx::query(
         r#"
         DO $$
@@ -174,6 +180,48 @@ async fn ensure_tables_exist(pool: &Pool<Postgres>) -> Result<(), Error> {
                 WHERE table_name='tender_records' AND column_name='notification_sent_at'
             ) THEN
                 ALTER TABLE tender_records ADD COLUMN notification_sent_at TIMESTAMP WITH TIME ZONE DEFAULT NULL;
+            END IF;
+
+            IF NOT EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_name='tender_records' AND column_name='updated_at'
+            ) THEN
+                ALTER TABLE tender_records ADD COLUMN updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;
+            END IF;
+
+            IF NOT EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_name='tender_records' AND column_name='ml_processed'
+            ) THEN
+                ALTER TABLE tender_records ADD COLUMN ml_processed BOOLEAN DEFAULT FALSE;
+            END IF;
+
+            IF NOT EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_name='tender_records' AND column_name='ml_bid'
+            ) THEN
+                ALTER TABLE tender_records ADD COLUMN ml_bid BOOLEAN;
+            END IF;
+
+            IF NOT EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_name='tender_records' AND column_name='ml_confidence'
+            ) THEN
+                ALTER TABLE tender_records ADD COLUMN ml_confidence DECIMAL(5,4);
+            END IF;
+
+            IF NOT EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_name='tender_records' AND column_name='ml_reasoning'
+            ) THEN
+                ALTER TABLE tender_records ADD COLUMN ml_reasoning TEXT;
+            END IF;
+
+            IF NOT EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_name='tender_records' AND column_name='ml_status'
+            ) THEN
+                ALTER TABLE tender_records ADD COLUMN ml_status VARCHAR(20) DEFAULT 'pending';
             END IF;
         END $$;
         "#,
