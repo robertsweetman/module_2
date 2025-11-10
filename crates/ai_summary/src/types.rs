@@ -126,13 +126,52 @@ pub struct Config {
 
 impl Config {
     pub fn from_env() -> anyhow::Result<Self> {
+        // Debug: Check what environment variables are available
+        tracing::info!("Loading configuration from environment variables...");
+
+        let database_url = match std::env::var("DATABASE_URL") {
+            Ok(url) => {
+                tracing::info!("✓ DATABASE_URL found (length: {})", url.len());
+                url
+            }
+            Err(e) => {
+                tracing::error!("✗ DATABASE_URL not found: {:?}", e);
+                tracing::error!(
+                    "Available env vars: {:?}",
+                    std::env::vars().map(|(k, _)| k).collect::<Vec<_>>()
+                );
+                return Err(anyhow::anyhow!("DATABASE_URL environment variable not set"));
+            }
+        };
+
+        let anthropic_api_key = match std::env::var("ANTHROPIC_API_KEY") {
+            Ok(key) => {
+                tracing::info!("✓ ANTHROPIC_API_KEY found (length: {})", key.len());
+                key
+            }
+            Err(e) => {
+                tracing::error!("✗ ANTHROPIC_API_KEY not found: {:?}", e);
+                return Err(anyhow::anyhow!("ANTHROPIC_API_KEY not set"));
+            }
+        };
+
+        let sns_queue_url = match std::env::var("SNS_QUEUE_URL") {
+            Ok(url) => {
+                tracing::info!("✓ SNS_QUEUE_URL found (length: {})", url.len());
+                url
+            }
+            Err(e) => {
+                tracing::error!("✗ SNS_QUEUE_URL not found: {:?}", e);
+                return Err(anyhow::anyhow!("SNS_QUEUE_URL not set"));
+            }
+        };
+
+        tracing::info!("✅ All configuration loaded successfully");
+
         Ok(Self {
-            database_url: std::env::var("DATABASE_URL")
-                .map_err(|_| anyhow::anyhow!("DATABASE_URL not set"))?,
-            anthropic_api_key: std::env::var("ANTHROPIC_API_KEY")
-                .map_err(|_| anyhow::anyhow!("ANTHROPIC_API_KEY not set"))?,
-            sns_queue_url: std::env::var("SNS_QUEUE_URL")
-                .map_err(|_| anyhow::anyhow!("SNS_QUEUE_URL not set"))?,
+            database_url,
+            anthropic_api_key,
+            sns_queue_url,
         })
     }
 }
