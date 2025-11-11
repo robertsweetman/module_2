@@ -224,7 +224,7 @@ resource "aws_lambda_function" "etenders_scraper" {
 resource "aws_cloudwatch_event_rule" "daily_tender_scan" {
   name                = "daily-tender-scan"
   description         = "Trigger tender scanning every day at 11:00 UTC (12:00 UK time)"
-  schedule_expression = "cron(0 18 * * ? *)"
+  schedule_expression = "cron(0 11 * * ? *)"
 }
 
 resource "aws_cloudwatch_event_target" "daily_tender_scan_target" {
