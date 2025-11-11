@@ -220,11 +220,11 @@ resource "aws_lambda_function" "etenders_scraper" {
   memory_size = 512
 }
 
-# EventBridge rule to trigger etenders_scraper Lambda daily at 11:00 UTC (12:00 UK time)
+# EventBridge rule to trigger etenders_scraper Lambda weekdays at 09:00 UTC (10:00 UK time in winter, 09:00 in summer)
 resource "aws_cloudwatch_event_rule" "daily_tender_scan" {
   name                = "daily-tender-scan"
-  description         = "Trigger tender scanning every day at 11:00 UTC (12:00 UK time)"
-  schedule_expression = "cron(0 9 * * ? *)"
+  description         = "Trigger tender scanning Monday-Friday at 09:00 UTC"
+  schedule_expression = "cron(0 9 ? * MON-FRI *)"
 }
 
 resource "aws_cloudwatch_event_target" "daily_tender_scan_target" {
