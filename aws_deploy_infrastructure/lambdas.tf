@@ -221,29 +221,29 @@ resource "aws_lambda_function" "etenders_scraper" {
 }
 
 # EventBridge rule to trigger etenders_scraper Lambda weekdays at 09:00 UTC (10:00 UK time in winter, 09:00 in summer)
-resource "aws_cloudwatch_event_rule" "daily_tender_scan" {
-  name                = "daily-tender-scan"
-  description         = "Trigger tender scanning Monday-Friday at 09:00 UTC"
-  schedule_expression = "cron(0 9 ? * MON-FRI *)"
-}
+# resource "aws_cloudwatch_event_rule" "daily_tender_scan" {
+#   name                = "daily-tender-scan"
+#   description         = "Trigger tender scanning Monday-Friday at 09:00 UTC"
+#   schedule_expression = "cron(0 9 ? * MON-FRI *)"
+# }
 
-resource "aws_cloudwatch_event_target" "daily_tender_scan_target" {
-  rule      = aws_cloudwatch_event_rule.daily_tender_scan.name
-  target_id = "etenders-scraper-lambda"
-  arn       = aws_lambda_function.etenders_scraper.arn
+# resource "aws_cloudwatch_event_target" "daily_tender_scan_target" {
+#   rule      = aws_cloudwatch_event_rule.daily_tender_scan.name
+#   target_id = "etenders-scraper-lambda"
+#   arn       = aws_lambda_function.etenders_scraper.arn
 
-  input = jsonencode({
-    max_pages  = 10
-    test_mode  = false
-    start_page = 1
-  })
-}
+#   input = jsonencode({
+#     max_pages  = 10
+#     test_mode  = false
+#     start_page = 1
+#   })
+# }
 
-# Permission for EventBridge to invoke Lambda
-resource "aws_lambda_permission" "allow_eventbridge_etenders_scraper" {
-  statement_id  = "AllowExecutionFromEventBridge"
-  action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.etenders_scraper.function_name
-  principal     = "events.amazonaws.com"
-  source_arn    = aws_cloudwatch_event_rule.daily_tender_scan.arn
-}
+# # Permission for EventBridge to invoke Lambda
+# resource "aws_lambda_permission" "allow_eventbridge_etenders_scraper" {
+#   statement_id  = "AllowExecutionFromEventBridge"
+#   action        = "lambda:InvokeFunction"
+#   function_name = aws_lambda_function.etenders_scraper.function_name
+#   principal     = "events.amazonaws.com"
+#   source_arn    = aws_cloudwatch_event_rule.daily_tender_scan.arn
+# }
